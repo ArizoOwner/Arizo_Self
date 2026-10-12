@@ -10,7 +10,6 @@ function createEnv() {
       async delete(k) { store.delete(k); },
       async list(o = {}) { return { keys: [...store.keys()].filter(k => k.startsWith(o.prefix || '')).map(name => ({ name })) }; }
     },
-    ADMIN_PASSWORD: 'SuperAdminPassword@2026',
     RUNNER_SECRET: 'SuperAdminPassword@2026',
     API_ID: '2040',
     API_HASH: 'b18441a1ff607e10a989891a5462e627'
