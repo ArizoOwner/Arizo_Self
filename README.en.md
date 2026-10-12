@@ -339,6 +339,25 @@
 
 </div>
 
+<div align="center">
+
+<img src="./assets/architecture.en.svg" alt="Arizo Self system architecture" width="100%"/>
+
+<br/>
+
+<img src="./assets/flow-strip.en.svg" alt="Data path from you to Telegram" width="100%"/>
+
+</div>
+
+| Layer | Role | Key trait |
+|:--|:--|:--|
+| ☁️ **Cloudflare Edge** | API, Web Studio, Mini App and webhooks | Per-user isolated vault (AES‑256), honeypot with auto-ban |
+| 🔄 **24/7 Engine** | GitHub Actions or VPS runner | 10s config sync, warm sockets, anti-delete/edit buffer |
+| 📱 **Telegram** | Your account, official datacenter and helper bot | MTProto 2.0 at sub‑40ms latency |
+
+<details>
+<summary>🔬 Detailed diagram (Mermaid) · expand for the full graph</summary>
+
 ```mermaid
 graph TD
     subgraph "🌐 Cloudflare Edge Layer"
@@ -379,6 +398,9 @@ graph TD
     style BOT fill:#0088cc,stroke:#0088cc,color:#fff
     style USER fill:#0ea5e9,stroke:#0ea5e9,color:#fff
 ```
+
+</details>
+
 
 ---
 
