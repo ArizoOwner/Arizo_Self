@@ -48,7 +48,7 @@ const call = (env, token, path, method, body) => worker.fetch(new Request('https
   body: body ? JSON.stringify(body) : undefined
 }), env);
 
-const VALID_TOKEN = '777000111:AAFakeWatchBotTokenValue_1234567890';
+const VALID_TOKEN = '777000111:test_only_not_a_real_token';
 
 function mockTelegram(handler) {
   const originalFetch = globalThis.fetch;
