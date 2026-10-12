@@ -1,9 +1,10 @@
 import { describe, it, assert, assertEqual } from './test-runner.js';
-import worker from '../src/index.js';
+import worker, { resetStorageCachesForTests } from '../src/index.js';
 import { generateTotpCode } from '../src/security/totp.js';
 import { hashPassword, generateRandomHex } from '../src/crypto.js';
 
 function createMockEnv(opts = {}) {
+  resetStorageCachesForTests();
   const store = new Map();
   const env = {
     KV: {
@@ -30,7 +31,6 @@ function createMockEnv(opts = {}) {
         return { keys };
       }
     },
-    ADMIN_PASSWORD: 'SuperAdminPassword@2026',
     RUNNER_SECRET: 'SuperAdminPassword@2026',
     API_ID: '2040',
     API_HASH: 'b18441a1ff607e10a989891a5462e627',
@@ -98,34 +98,66 @@ describe('Worker Suite — Edge Security & API Lifecycle', () => {
     assertEqual(logs[0].eventType, 'HONEYPOT_TRIGGERED');
   });
 
-  it('should handle admin authentication and audit log endpoint', async () => {
+  it('should have no master-password login endpoint and gate admin routes by user role', async () => {
     const env = createMockEnv();
 
-    // 1. Unauthorized admin request
-    const unauthReq = new Request('https://arizo.test/api/admin/audit-logs', { method: 'GET' });
-    const unauthRes = await worker.fetch(unauthReq, env);
-    assertEqual(unauthRes.status, 401);
+    const unauth = await worker.fetch(new Request('https://arizo.test/api/admin/audit-logs'), env);
+    assertEqual(unauth.status, 401);
 
-    // 2. Admin Login
-    const loginReq = new Request('https://arizo.test/api/admin/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: 'SuperAdminPassword@2026' })
-    });
-    const loginRes = await worker.fetch(loginReq, env);
-    assertEqual(loginRes.status, 200);
-    const loginData = await loginRes.json();
-    assert(loginData.token, 'Must return admin token');
+    const login = await worker.fetch(new Request('https://arizo.test/api/admin/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password: 'SuperAdminPassword@2026' })
+    }), env);
+    assertEqual(login.status, 404);
 
-    // 3. Authorized audit-logs request
-    const authReq = new Request('https://arizo.test/api/admin/audit-logs', {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${loginData.token}` }
-    });
-    const authRes = await worker.fetch(authReq, env);
-    assertEqual(authRes.status, 200);
-    const authData = await authRes.json();
-    assert(Array.isArray(authData.events));
+    const reg = await worker.fetch(new Request('https://arizo.test/api/user/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.21' },
+      body: JSON.stringify({ username: 'owner_one', password: 'OwnerPassword@123' })
+    }), env);
+    const owner = await reg.json();
+    assertEqual(reg.status, 200);
+    assertEqual(owner.isAdmin, true);
+
+    const authed = await worker.fetch(new Request('https://arizo.test/api/admin/audit-logs', { headers: { Authorization: 'Bearer ' + owner.token } }), env);
+    assertEqual(authed.status, 200);
+    assert(Array.isArray((await authed.json()).events));
+  });
+
+  it('should make only the very first registrant the owner, with no license code', async () => {
+    const env = createMockEnv();
+    const boot1 = await (await worker.fetch(new Request('https://arizo.test/api/bootstrap'), env)).json();
+    assertEqual(boot1.firstAdmin, true);
+
+    const first = await (await worker.fetch(new Request('https://arizo.test/api/user/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.22' },
+      body: JSON.stringify({ username: 'founder', password: 'FounderPassword@123' })
+    }), env)).json();
+    assertEqual(first.role, 'admin');
+    assertEqual(first.plan, 'lifetime');
+
+    const boot2 = await (await worker.fetch(new Request('https://arizo.test/api/bootstrap'), env)).json();
+    assertEqual(boot2.firstAdmin, false);
+
+    const second = await worker.fetch(new Request('https://arizo.test/api/user/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.23' },
+      body: JSON.stringify({ username: 'latecomer', password: 'LatePassword@123' })
+    }), env);
+    assertEqual(second.status, 400);
+
+    const trick = await worker.fetch(new Request('https://arizo.test/api/user/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.24' },
+      body: JSON.stringify({ username: 'sneaky', password: 'SneakyPassword@123', licenseCode: 'ADMIN' })
+    }), env);
+    assertEqual(trick.status, 400);
+
+    const me = await (await worker.fetch(new Request('https://arizo.test/api/user/me', { headers: { Authorization: 'Bearer ' + first.token } }), env)).json();
+    assertEqual(me.isAdmin, true);
+  });
+
+  it('should reject the runner endpoint without RUNNER_SECRET even if no other secret exists', async () => {
+    const env = createMockEnv();
+    delete env.RUNNER_SECRET;
+    const res = await worker.fetch(new Request('https://arizo.test/api/internal/active-users', { headers: { Authorization: 'Bearer anything' } }), env);
+    assertEqual(res.status, 401);
   });
 
   it('should execute complete user 2FA setup, verify and login lifecycle', async () => {
@@ -258,7 +290,8 @@ describe('Worker Suite — Edge Security & API Lifecycle', () => {
 
     // 1. Setup admin session
     const adminToken = 'adm_test_token_' + Date.now();
-    await env.KV.put('admin_token:' + adminToken, JSON.stringify({ role: 'admin', createdAt: Date.now() }));
+    await env.KV.put('user:test_owner', JSON.stringify({ username: 'test_owner', role: 'admin', plan: 'lifetime' }));
+    await env.KV.put('token:' + adminToken, JSON.stringify({ username: 'test_owner', createdAt: Date.now() }));
     const adminHeaders = { 'Authorization': `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
     // 2. Setup user with 2FA, bot, and telegram telemetry
