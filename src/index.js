@@ -21,7 +21,7 @@ import { BackupManager } from './modules/backupManager.js';
 import { sanitizeWatchAlerts } from './modules/watchAlerts.js';
 import { handleWizardApi, WizardError } from './modules/wizardDeploy.js';
 import { APP_NAME, APP_VERSION, APP_CHANNEL, APP_BUILD } from './version.js';
-import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName } from './modules/updater.js';
+import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName, getUpdaterState, putUpdaterState, loadCreds, saveCreds, clearCreds, runStoredUpdate, autoUpdateTick } from './modules/updater.js';
 import QRCode from 'qrcode';
 
 // هدرهای امنیتی درجه سازمانی (Enterprise Security & CSP)
@@ -708,6 +708,45 @@ export default {
       }
     }
 
+    if (url.pathname === '/api/admin/update/settings' && request.method === 'GET') {
+      if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
+      const st = await getUpdaterState(env);
+      const creds = await loadCreds(env);
+      return json({
+        ok: true, connected: !!creds, hasGh: !!(creds && creds.ghToken), repo: (creds && creds.repo) || '',
+        workerName: (creds && creds.workerName) || '', auto: !!st.auto && !!creds,
+        lastCheck: st.lastCheck || 0, lastResult: st.lastResult || null, canStore: !!env.RUNNER_SECRET
+      }, 200, { 'Cache-Control': 'no-store' });
+    }
+
+    if (['/api/admin/update/connect', '/api/admin/update/disconnect', '/api/admin/update/auto'].includes(url.pathname) && request.method === 'POST') {
+      if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
+      const rl = await checkRateLimit(env, `rl:updc:${clientIP}`, 12, 600);
+      if (!rl.allowed) return json({ ok: false, code: 'rate_limited', fa: 'درخواست‌های بیش از حد؛ چند دقیقه دیگر تلاش کنید.', en: 'Too many requests; try again in a few minutes.' }, 429);
+      const body = await request.json().catch(() => ({}));
+      try {
+        if (url.pathname.endsWith('/connect')) {
+          const name = String(body.workerName || guessWorkerName(url.hostname) || '').toLowerCase();
+          if (!name) return json({ ok: false, code: 'need_worker_name', fa: 'نام Worker از آدرس سایت مشخص نیست؛ آن را وارد کنید.', en: 'The Worker name cannot be read from the address; please enter it.' }, 400, { 'Cache-Control': 'no-store' });
+          await saveCreds(env, { cfToken: body.cfToken, ghToken: body.ghToken || '', repo: body.repo || '', workerName: name });
+          await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, { ip: clientIP, user: 'admin', details: { action: 'updater_connect', gh: !!body.ghToken } }, AUDIT_SEVERITY.WARNING);
+        } else if (url.pathname.endsWith('/disconnect')) {
+          await clearCreds(env);
+          await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, { ip: clientIP, user: 'admin', details: { action: 'updater_disconnect' } }, AUDIT_SEVERITY.INFO);
+        } else {
+          if (body.enabled === true && !await loadCreds(env)) {
+            return json({ ok: false, code: 'not_connected', fa: 'ابتدا توکن Cloudflare را یک بار ثبت کنید.', en: 'Save a Cloudflare token first.' }, 409, { 'Cache-Control': 'no-store' });
+          }
+          await putUpdaterState(env, { auto: body.enabled === true, lastCheck: 0 });
+          globalThis.__updNext = 0;
+        }
+        return json({ ok: true }, 200, { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        if (err instanceof WizardError) return json({ ok: false, code: err.code, fa: err.fa, en: err.en, ...err.extra }, err.status, { 'Cache-Control': 'no-store' });
+        return json({ ok: false, code: 'internal', fa: 'خطای داخلی', en: 'Internal error' }, 500);
+      }
+    }
+
     if ((url.pathname === '/api/admin/update/apply' || url.pathname === '/api/admin/update/runner') && request.method === 'POST') {
       if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
       const rl = await checkRateLimit(env, `rl:upd:${clientIP}`, 12, 600);
@@ -715,18 +754,25 @@ export default {
       const body = await request.json().catch(() => ({}));
       try {
         if (url.pathname.endsWith('/apply')) {
-          const name = String(body.workerName || guessWorkerName(url.hostname) || '').toLowerCase();
-          if (!name) {
-            return json({ ok: false, code: 'need_worker_name', fa: 'نام Worker از آدرس سایت مشخص نیست؛ آن را وارد کنید.', en: 'The Worker name cannot be read from the address; please enter it.' }, 400, { 'Cache-Control': 'no-store' });
+          let out, name;
+          if (body.cfToken) {
+            name = String(body.workerName || guessWorkerName(url.hostname) || '').toLowerCase();
+            if (!name) {
+              return json({ ok: false, code: 'need_worker_name', fa: 'نام Worker از آدرس سایت مشخص نیست؛ آن را وارد کنید.', en: 'The Worker name cannot be read from the address; please enter it.' }, 400, { 'Cache-Control': 'no-store' });
+            }
+            out = await applyCodeUpdate({ cfToken: body.cfToken, workerName: name, force: body.force === true });
+          } else {
+            out = await runStoredUpdate(env, { force: body.force === true, source: 'manual' });
+            name = out.workerName;
           }
-          const out = await applyCodeUpdate({ cfToken: body.cfToken, workerName: name, force: body.force === true });
           await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, {
             ip: clientIP, user: 'admin',
             details: { action: 'panel_update', from: APP_BUILD, to: out.latest.build, version: out.latest.version }
           }, AUDIT_SEVERITY.WARNING);
-          return json({ ok: true, latest: out.latest, workerName: name }, 200, { 'Cache-Control': 'no-store' });
+          return json({ ok: true, latest: out.latest, workerName: name, runner: out.runner ? (out.runner.error ? 'failed' : 'ok') : 'skipped' }, 200, { 'Cache-Control': 'no-store' });
         }
-        const out = await ghSyncRunner(body.ghToken, body.repo);
+        const stored = body.ghToken ? null : await loadCreds(env);
+        const out = await ghSyncRunner(body.ghToken || (stored && stored.ghToken), body.repo || (stored && stored.repo));
         await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, {
           ip: clientIP, user: 'admin', details: { action: 'runner_update', repo: out.repo, merge: out.mergeType }
         }, AUDIT_SEVERITY.INFO);
@@ -5290,6 +5336,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
     if (isSetupRequired(env)) return;
     initEnvStorage(env);
     ctx.waitUntil(secureWebhooks(env).catch(() => {}));
+    ctx.waitUntil(autoUpdateTick(env).catch(() => {}));
     ctx.waitUntil((async () => {
       try {
         // ۱. بررسی زنده بودن رانر در حافظه ایزولیت (اگر در ۵ دقیقه اخیر فعال بوده، پردازش کرون فوراً متوقف می‌شود)
