@@ -206,6 +206,7 @@ export async function runStoredUpdate(env, { force = false, source = 'manual' } 
     try { runner = await ghSyncRunner(creds.ghToken, creds.repo); } catch (e) { runner = { error: e.code || 'failed' }; }
   }
   await putUpdaterState(env, {
+    lastInstalledBuild: out.latest.build,
     lastResult: { at: Date.now(), ok: true, source, version: out.latest.version, build: out.latest.build, runner: creds.ghToken ? (runner && !runner.error ? 'ok' : 'failed') : 'skipped' }
   });
   return { ...out, workerName: creds.workerName, runner };
@@ -222,7 +223,8 @@ export async function autoUpdateTick(env) {
   await putUpdaterState(env, { lastCheck: now });
   try {
     const latest = await fetchLatestRelease({ fresh: true });
-    if (latest.build > APP_BUILD) await runStoredUpdate(env, { source: 'auto' });
+    // هر شمارهٔ ساخت فقط یک بار خودکار نصب می‌شود؛ اگر ریلیز ناسازگار منتشر شود، حلقهٔ نصب تکراری ایجاد نمی‌شود
+    if (latest.build > APP_BUILD && latest.build > (st.lastInstalledBuild || 0)) await runStoredUpdate(env, { source: 'auto' });
   } catch (e) {
     await putUpdaterState(env, { lastResult: { at: now, ok: false, source: 'auto', code: (e && e.code) || 'internal' } });
   }
