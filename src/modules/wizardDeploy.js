@@ -36,7 +36,7 @@ export class WizardError extends Error {
 // ---------------------------------------------------------------- helpers
 const NAME_RE = /^[a-z0-9][a-z0-9-]{0,53}$/;
 const SUBDOMAIN_RE = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
-const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
+export const REPO_RE = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/;
 
 export function validateWorkerName(name) {
   if (!NAME_RE.test(String(name || ''))) {
@@ -47,7 +47,7 @@ export function validateWorkerName(name) {
   return name;
 }
 
-function requireToken(token, kind) {
+export function requireToken(token, kind) {
   const t = String(token || '').trim();
   if (t.length < 20 || t.length > 400 || /\s/.test(t)) {
     throw new WizardError(kind === 'cf' ? 'cf_token_format' : 'gh_token_format',
@@ -94,7 +94,7 @@ export function sealSecret(publicKeyB64, plaintext) {
 }
 
 // ---------------------------------------------------------------- Cloudflare
-async function cfCall(token, path, { method = 'GET', body, form } = {}) {
+export async function cfCall(token, path, { method = 'GET', body, form } = {}) {
   const headers = { Authorization: 'Bearer ' + token };
   let payload;
   if (form) {
@@ -325,7 +325,7 @@ export async function cfFinalize(tokenRaw, accountId, { workerName, d1Id }) {
 }
 
 // ---------------------------------------------------------------- GitHub
-async function ghCall(token, path, { method = 'GET', body } = {}) {
+export async function ghCall(token, path, { method = 'GET', body } = {}) {
   const headers = {
     Authorization: 'Bearer ' + token,
     Accept: 'application/vnd.github+json',
@@ -349,7 +349,7 @@ async function ghCall(token, path, { method = 'GET', body } = {}) {
   return { status: res.status, ok: res.ok, data, headers: res.headers };
 }
 
-function ghFail(res, fa, en) {
+export function ghFail(res, fa, en) {
   const msg = (res.data && res.data.message) ? res.data.message : 'HTTP ' + res.status;
   if (res.status === 401) {
     return new WizardError('gh_auth', 'توکن GitHub نامعتبر یا منقضی است.', 'The GitHub token is invalid or expired.');
