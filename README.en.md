@@ -468,7 +468,7 @@ graph TD
    git clone https://github.com/ArizoOwner/Arizo_Self.git
    cd Arizo_Self
    ```
-2. Put your own KV and D1 ids in `wrangler.toml`, then run `npx wrangler secret put RUNNER_SECRET`.
+2. Copy `wrangler.toml.example` to `wrangler.toml`, put your own KV and D1 ids in it, then run `npx wrangler secret put RUNNER_SECRET`.
 3. Run `npx wrangler deploy`, create the GitHub repository secrets `CLOUDFLARE_URL` and `RUNNER_SECRET`, and enable the `⚡ Telegram Clock Engine` workflow under **Actions**.
 
 #### 🤖 &nbsp; Helper Bot & Logger Activation
