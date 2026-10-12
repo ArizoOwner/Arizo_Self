@@ -4330,7 +4330,8 @@ export function panelHTML(env, options = {}) {
 
       <!-- فرم ثبت‌نام کاربران با کد لایسنس -->
       <div id="registerFormBox" class="hidden">
-        <div class="form-group" style="background: var(--accent-purple-bg); border: 1px dashed var(--accent-purple-border); border-radius: var(--radius-md); padding: 14px;">
+        <div id="firstAdminNotice" class="hidden" style="background: linear-gradient(135deg, rgba(245,158,11,.16), rgba(99,102,241,.14)); border: 1px solid rgba(245,158,11,.5); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px; line-height: 1.8; font-size: 0.9rem;"></div>
+        <div class="form-group" id="licenseGroup" style="background: var(--accent-purple-bg); border: 1px dashed var(--accent-purple-border); border-radius: var(--radius-md); padding: 14px;">
           <label class="form-label" style="color: var(--accent-purple);">
             <span data-i18n="authLicenseLabel">🎟️ کد لایسنس / ردیم‌کد فعال‌سازی</span>
             <span style="font-size:0.75rem; color:var(--accent-amber);" data-i18n="authLicenseReq">الزامی جهت ساخت حساب</span>
@@ -7294,12 +7295,6 @@ export function panelHTML(env, options = {}) {
       }
     }
 
-    function getAdminToken() { return localStorage.getItem('admin_token') || ''; }
-    function setAdminToken(token) {
-      if (token) localStorage.setItem('admin_token', token);
-      else localStorage.removeItem('admin_token');
-    }
-
     function authHeaders() {
       return {
         'Content-Type': 'application/json',
@@ -7308,7 +7303,7 @@ export function panelHTML(env, options = {}) {
     }
 
     function adminHeaders() {
-      var token = getAuthToken() || getAdminToken();
+      var token = getAuthToken();
       return {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + token
@@ -7510,7 +7505,7 @@ export function panelHTML(env, options = {}) {
 
       // Translation hook
       var origHtml = filtered.map(function(u) {
-        var isOwner = !!u.isOwner || u.username.toLowerCase() === 'amirmaster' || u.username.toLowerCase() === 'admin';
+        var isOwner = !!u.isOwner;
         var isAdm = isOwner || !!u.isAdmin || u.role === 'admin';
         var roleBadge = isOwner
           ? '<span style="color:var(--accent-amber); background:var(--accent-amber-bg); border:1px solid var(--accent-amber-border); padding:2px 7px; border-radius:6px; font-weight:800; font-size:0.72rem;">👑 مالک</span>'
@@ -7579,7 +7574,7 @@ export function panelHTML(env, options = {}) {
       }
       window.activeInspectedUser = u.username;
 
-      var isOwner = !!u.isOwner || u.username.toLowerCase() === 'amirmaster' || u.username.toLowerCase() === 'admin';
+      var isOwner = !!u.isOwner;
       var isAdm = isOwner || !!u.isAdmin || u.role === 'admin';
 
       document.getElementById('inspectorAvatar').textContent = isOwner ? '👑' : (isAdm ? '🛡️' : '👤');
@@ -8164,6 +8159,23 @@ export function panelHTML(env, options = {}) {
     // ==========================================
     // 👤 احراز هویت و ورود/ثبت‌نام کاربران
     // ==========================================
+    window.initFirstAdminHint = async function() {
+      try {
+        var r = await fetch('/api/bootstrap', { cache: 'no-store' });
+        var d = await r.json();
+        var box = document.getElementById('firstAdminNotice');
+        var lic = document.getElementById('licenseGroup');
+        if (!d || !d.firstAdmin || !box) return;
+        var en = window.currentLang === 'en';
+        box.innerHTML = en
+          ? '👑 <b>This site has no accounts yet.</b> The first account you create here becomes the <b>owner</b> with a lifetime plan and access to the management panel. No license code is needed.'
+          : '👑 <b>این سایت هنوز هیچ حسابی ندارد.</b> اولین حسابی که اینجا بسازید، <b>مدیر کل</b> می‌شود، اشتراک دائمی می‌گیرد و به پنل مدیریت هم دسترسی دارد. نیازی به کد لایسنس نیست.';
+        box.classList.remove('hidden');
+        if (lic) lic.classList.add('hidden');
+        switchUserTab('register');
+      } catch (_) {}
+    };
+
     window.switchUserTab = function(tab) {
       var btnLog = document.getElementById('userTabLogin');
       var btnReg = document.getElementById('userTabRegister');
@@ -10201,6 +10213,7 @@ export function panelHTML(env, options = {}) {
         if (window.location.pathname.startsWith('/admin')) {
           try { window.history.replaceState({}, document.title, '/'); } catch (_) {}
         }
+        if (typeof window.initFirstAdminHint === 'function') window.initFirstAdminHint();
         return;
       }
 
