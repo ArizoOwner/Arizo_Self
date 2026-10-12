@@ -67,7 +67,12 @@ const authTokensCache = new Map(); // token -> { auth, expiresAt }
 const verifiedWebhooks = new Map(); // botTok -> timestamp
 const STORAGE_MEM_TTL = 30000; // 30 seconds RAM TTL
 
+// کلیدهای حساس به همگامی بین isolateها (توکن‌های به‌روزرسان) هرگز در RAM کش نمی‌شوند؛ هر خواندن از D1 می‌آید
+const UNCACHED_KEY_PREFIXES = ['updater:'];
+const isUncachedKey = key => UNCACHED_KEY_PREFIXES.some(p => key.startsWith(p));
+
 function setStorageMemCache(key, valStr, expiresAt) {
+  if (isUncachedKey(key)) return;
   if (storageMemCache.size > 1000) {
     const oldestKey = storageMemCache.keys().next().value;
     storageMemCache.delete(oldestKey);
