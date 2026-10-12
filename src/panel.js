@@ -2109,6 +2109,7 @@ export function panelHTML(env, options = {}) {
     #studioPaneBot:not(.hidden),
     #studioPaneGhost:not(.hidden),
     #studioPaneAI:not(.hidden),
+    #studioPaneWatch:not(.hidden),
     #studioPaneSecurity:not(.hidden),
     #adminTabContentStats:not(.hidden),
     #adminTabContentCodes:not(.hidden),
@@ -4590,6 +4591,9 @@ export function panelHTML(env, options = {}) {
         <button id="studioTabAI" class="studio-tab-btn" onclick="switchStudioTab('ai')">
           <span>🤖</span> <span data-i18n="studioTabAI">پاسخ AI</span>
         </button>
+        <button id="studioTabWatch" class="studio-tab-btn" onclick="switchStudioTab('watch')">
+          <span>🔔</span> <span>اعلان چت‌ها</span>
+        </button>
         <button id="studioTabSecurity" class="studio-tab-btn" onclick="switchStudioTab('security')">
           <span>🔐</span> <span data-i18n="studioTabSecurity">امنیت و ۲FA</span>
         </button>
@@ -5157,6 +5161,89 @@ export function panelHTML(env, options = {}) {
             <input type="checkbox" id="botForwardTtlToggle" checked>
             <span class="slider"></span>
           </label>
+        </div>
+      </div>
+
+      <!-- 🔔 تب: اعلان پیام چت‌های انتخاب‌شده در ربات جداگانه (Watch Alerts) -->
+      <div id="studioPaneWatch" class="hidden">
+        <div style="background: linear-gradient(135deg, rgba(245, 158, 11, 0.14) 0%, rgba(99, 102, 241, 0.14) 100%); border: 1px solid var(--accent-amber-border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px;">
+          <div style="font-size: 0.98rem; font-weight: 800; color: var(--text-main); margin-bottom: 6px; display: flex; align-items: center; gap: 8px;">
+            <span>🔔</span> <span>اعلان پیام چت‌های انتخاب‌شده در ربات جداگانه</span>
+          </div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.7;">
+            هر زمان در چت‌ها یا گروه‌های انتخابی شما پیام جدیدی بیاید (مثلاً فقط پیام ادمین‌ها و سازنده گروه، یا فقط افراد مشخص)، اعلان آن از طریق <b>یک ربات تلگرامی جداگانه</b> (غیر از ربات دستیار اصلی) برای شما ارسال می‌شود.
+          </div>
+        </div>
+
+        <div class="toggle-row" style="margin-bottom:18px;">
+          <div>
+            <div class="toggle-label">فعال‌سازی اعلان چت‌ها</div>
+            <div class="toggle-desc">با خاموش کردن، هیچ اعلانی ارسال نمی‌شود (قوانین حفظ می‌شوند)</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="watchEnabledToggle">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- مرحله ۱: ربات اعلان -->
+        <div class="form-group">
+          <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+            <span>۱) توکن ربات اعلان (یک ربات جدید از BotFather@ بسازید)</span>
+            <a href="https://t.me/BotFather" target="_blank" style="color:var(--accent-blue); font-size:0.75rem; text-decoration:none; font-weight:700;">➕ دریافت توکن</a>
+          </label>
+          <div class="input-action-row">
+            <input type="text" id="watchBotTokenInput" class="input-field mono" placeholder="123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ" dir="ltr" autocomplete="off">
+            <button class="btn btn-primary" id="btnWatchBotConnect" onclick="doConnectWatchBot()"><span>⚡ اتصال ربات اعلان</span></button>
+          </div>
+          <div id="watchBotStatus" style="display:none; margin-top:10px; padding:10px 14px; border-radius:var(--radius-md); background:var(--accent-green-bg); border:1px solid var(--accent-green-border); font-size:0.8rem; color:var(--text-main); align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+            <span id="watchBotStatusText">✅ ربات اعلان متصل است</span>
+            <span style="display:flex; gap:6px;">
+              <button type="button" class="btn btn-secondary" onclick="doTestWatchBot()" style="padding:4px 10px; font-size:0.74rem; width:auto;">🧪 ارسال پیام آزمایشی</button>
+              <button type="button" class="btn btn-secondary" onclick="doDisconnectWatchBot()" style="padding:4px 10px; font-size:0.74rem; width:auto; color:var(--accent-rose); border-color:var(--accent-rose-border);">قطع اتصال</button>
+            </span>
+          </div>
+        </div>
+
+        <!-- مرحله ۲: مقصد اعلان -->
+        <div class="form-group">
+          <label class="form-label">۲) شناسه عددی تلگرام شما (مقصد اعلان‌ها)</label>
+          <input type="text" id="watchChatIdInput" class="input-field mono" placeholder="مثال: 123456789" dir="ltr" autocomplete="off">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; line-height: 1.7;">
+            💡 یک‌بار وارد ربات اعلان شوید و <code>Start</code> را بزنید، وگرنه تلگرام اجازه ارسال پیام نمی‌دهد. اگر ربات دستیار اصلی شما قفل شده باشد، همین شناسه به‌صورت خودکار پر می‌شود.
+          </div>
+        </div>
+
+        <!-- مرحله ۳: قوانین -->
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px; margin-bottom: 18px;">
+          <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); margin-bottom: 4px;">۳) چت‌های پایش‌شده و شرط اعلان</div>
+          <div style="font-size: 0.76rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.7;">
+            چت را با آیدی عددی، یوزرنیم (@name) یا لینک t.me وارد کنید. کلیدواژه‌های ویژه: <code>all</code> همه چت‌ها، <code>private</code> همه پیوی‌ها، <code>groups</code> همه گروه‌ها.
+          </div>
+          <div style="display:grid; grid-template-columns: 1fr; gap:8px;">
+            <input type="text" id="watchRuleTarget" class="input-field mono" placeholder="آیدی عددی / @username / لینک t.me / private / groups" dir="ltr" autocomplete="off">
+            <select id="watchRuleMode" class="input-field" onchange="onWatchModeChange()">
+              <option value="all">همه پیام‌های این چت</option>
+              <option value="admins">فقط پیام ادمین‌ها و سازنده (گروه/کانال)</option>
+              <option value="users">فقط پیام افراد مشخص</option>
+            </select>
+            <input type="text" id="watchRuleUsers" class="input-field mono" placeholder="افراد مشخص: آیدی عددی یا @username با ویرگول جدا شود" dir="ltr" autocomplete="off" style="display:none;">
+            <button type="button" class="btn btn-primary" onclick="addWatchRule()"><span>➕ افزودن به لیست پایش</span></button>
+          </div>
+          <div id="watchRulesList" style="margin-top:14px; display:flex; flex-direction:column; gap:8px;"></div>
+          <div id="watchRulesEmpty" style="display:flex; flex-direction:column; align-items:center; padding:18px 12px; margin-top:12px; text-align:center; color:var(--text-muted); font-size:0.8rem; border:1px dashed var(--border-subtle); border-radius:var(--radius-md);">
+            <span style="font-size:1.6rem; margin-bottom:4px;">🔕</span>
+            <span>هنوز چتی برای پایش انتخاب نشده است</span>
+          </div>
+        </div>
+
+        <div style="background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 16px;">
+          <div style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); margin-bottom: 10px;">میان‌بر در تلگرام (داخل خود چت بنویسید):</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.9;">
+            <code style="color: var(--accent-blue);">.watch</code> — پایش همه پیام‌های همین چت<br>
+            <code style="color: var(--accent-blue);">.watch admins</code> — فقط پیام ادمین‌ها و سازنده همین گروه<br>
+            <code style="color: var(--accent-blue);">.unwatch</code> — توقف اعلان همین چت
+          </div>
         </div>
       </div>
 
@@ -6311,6 +6398,18 @@ export function panelHTML(env, options = {}) {
       '📸 ذخیره‌سازی هوشمند رسانه‌های زمان‌دار (Anti-TTL)': '📸 Secure Storage for View-Once Media (Anti-TTL)',
       'تصاویر، فیلم‌ها و ویس‌های محوشونده (View-Once) مستقیماً به پیوی ربات اختصاصی شما ارسال می‌شوند': 'Expiring photos, videos, and voice notes (View-Once) are archived directly to your bot before disappearing',
       'ربات و لاگر': 'Bot & Logger',
+      'اعلان چت‌ها': 'Chat Alerts',
+      'اعلان پیام چت‌های انتخاب‌شده در ربات جداگانه': 'Selected-Chat Message Alerts via a Separate Bot',
+      'فعال‌سازی اعلان چت‌ها': 'Enable Chat Alerts',
+      '⚡ اتصال ربات اعلان': '⚡ Connect Alert Bot',
+      '🧪 ارسال پیام آزمایشی': '🧪 Send Test Message',
+      'قطع اتصال': 'Disconnect',
+      '➕ افزودن به لیست پایش': '➕ Add to Watch List',
+      'همه پیام‌های این چت': 'All messages in this chat',
+      'فقط پیام ادمین‌ها و سازنده (گروه/کانال)': 'Only admins & owner messages (group/channel)',
+      'فقط پیام افراد مشخص': 'Only messages from specific people',
+      'هنوز چتی برای پایش انتخاب نشده است': 'No chats are being watched yet',
+      '🗑️ حذف': '🗑️ Remove',
 
       // 🔐 Security & 2FA (Tab 9)
       'امنیت حساب کاربری و تنظیمات ورود دو مرحله‌ای': 'Account Security & Two-Factor Authentication (2FA)',
@@ -8831,6 +8930,7 @@ export function panelHTML(env, options = {}) {
       { id: 'bot', btn: 'studioTabBot', pane: 'studioPaneBot', title: 'ربات و لاگر', titleEn: 'Bot & Logger', icon: '⚡' },
       { id: 'ghost', btn: 'studioTabGhost', pane: 'studioPaneGhost', title: 'حالت شبح', titleEn: 'Ghost Mode', icon: '👻' },
       { id: 'ai', btn: 'studioTabAI', pane: 'studioPaneAI', title: 'پاسخ هوشمند AI', titleEn: 'Smart AI Reply', icon: '🤖' },
+      { id: 'watch', btn: 'studioTabWatch', pane: 'studioPaneWatch', title: 'اعلان چت‌ها', titleEn: 'Chat Alerts', icon: '🔔' },
       { id: 'security', btn: 'studioTabSecurity', pane: 'studioPaneSecurity', title: 'امنیت و ۲FA', titleEn: 'Security & 2FA', icon: '🔐' }
     ];
 
@@ -9154,6 +9254,11 @@ export function panelHTML(env, options = {}) {
           aiMaxReplies: document.getElementById('aiMaxRepliesSelect') ? parseInt(document.getElementById('aiMaxRepliesSelect').value, 10) : 3,
           aiCooldown: document.getElementById('aiCooldownSelect') ? parseInt(document.getElementById('aiCooldownSelect').value, 10) : 5,
           aiIgnoredUsers: (document.getElementById('aiIgnoredUsersInput') && document.getElementById('aiIgnoredUsersInput').value) || '',
+          watchAlerts: {
+            enabled: document.getElementById('watchEnabledToggle') ? document.getElementById('watchEnabledToggle').checked : false,
+            chatId: (document.getElementById('watchChatIdInput') && document.getElementById('watchChatIdInput').value.trim()) || '',
+            rules: window.watchRules || []
+          },
           bot: {
             token: (document.getElementById('botTokenInput') && document.getElementById('botTokenInput').value.trim()) || (window.currentBotToken || ''),
             antiDeleteEnabled: document.getElementById('botAntiDeleteToggle') ? document.getElementById('botAntiDeleteToggle').checked : true,
@@ -9291,8 +9396,154 @@ export function panelHTML(env, options = {}) {
       }
     };
 
+    // ==========================================
+    // 🔔 اعلان چت‌ها (Watch Alerts) — رابط کاربری
+    // ==========================================
+    window.watchRules = [];
+
+    window.applyWatchAlertsData = function(w, fallbackChatId) {
+      w = w || {};
+      window.watchRules = Array.isArray(w.rules) ? w.rules.slice() : [];
+      var tg = document.getElementById('watchEnabledToggle');
+      if (tg) tg.checked = !!w.enabled;
+      var chatInp = document.getElementById('watchChatIdInput');
+      if (chatInp) chatInp.value = w.chatId || fallbackChatId || '';
+      window.setWatchBotStatus(!!w.hasBot, w.botUsername);
+      window.renderWatchRules();
+    };
+
+    window.setWatchBotStatus = function(hasBot, username) {
+      var box = document.getElementById('watchBotStatus');
+      var txt = document.getElementById('watchBotStatusText');
+      if (box) box.style.display = hasBot ? 'flex' : 'none';
+      if (txt) txt.textContent = '✅ ربات اعلان متصل است' + (username ? (' (@' + username + ')') : '');
+    };
+
+    window.onWatchModeChange = function() {
+      var mode = document.getElementById('watchRuleMode').value;
+      document.getElementById('watchRuleUsers').style.display = (mode === 'users') ? 'block' : 'none';
+    };
+
+    window.renderWatchRules = function() {
+      var box = document.getElementById('watchRulesList');
+      var empty = document.getElementById('watchRulesEmpty');
+      if (!box) return;
+      box.innerHTML = '';
+      if (empty) empty.style.display = window.watchRules.length ? 'none' : 'flex';
+      var modeText = { all: 'همه پیام‌ها', admins: 'فقط ادمین‌ها و سازنده', users: 'افراد مشخص' };
+      window.watchRules.forEach(function(r, i) {
+        var row = document.createElement('div');
+        row.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 12px; background:var(--bg-surface-elevated); border:1px solid var(--border-subtle); border-radius:var(--radius-md);';
+        var info = document.createElement('div');
+        info.style.cssText = 'min-width:0; flex:1;';
+        var title = document.createElement('div');
+        title.style.cssText = 'font-size:0.84rem; font-weight:700; color:var(--text-main); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
+        title.textContent = '💬 ' + (r.label ? (r.label + ' — ') : '') + r.target;
+        var sub = document.createElement('div');
+        sub.style.cssText = 'font-size:0.74rem; color:var(--text-muted); margin-top:2px;';
+        sub.textContent = (modeText[r.mode] || modeText.all) + ((r.mode === 'users' && r.users && r.users.length) ? (': ' + r.users.join(', ')) : '');
+        info.appendChild(title);
+        info.appendChild(sub);
+        var del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'btn btn-secondary';
+        del.style.cssText = 'padding:4px 10px; font-size:0.74rem; width:auto; color:var(--accent-rose); border-color:var(--accent-rose-border);';
+        del.textContent = '🗑️ حذف';
+        del.onclick = function() { window.removeWatchRule(i); };
+        row.appendChild(info);
+        row.appendChild(del);
+        box.appendChild(row);
+      });
+    };
+
+    window.addWatchRule = function() {
+      var target = document.getElementById('watchRuleTarget').value.trim();
+      var mode = document.getElementById('watchRuleMode').value;
+      var usersRaw = document.getElementById('watchRuleUsers').value.trim();
+      if (!target) { showToast('آیدی، یوزرنیم یا لینک چت را وارد کنید', 'error'); return; }
+      var users = [];
+      if (mode === 'users') {
+        users = usersRaw.split(',').map(function(x) { return x.trim(); }).filter(Boolean);
+        if (!users.length) { showToast('حداقل یک فرد (آیدی عددی یا @username) وارد کنید', 'error'); return; }
+      }
+      window.watchRules.push({ target: target, mode: mode, users: users });
+      document.getElementById('watchRuleTarget').value = '';
+      document.getElementById('watchRuleUsers').value = '';
+      window.renderWatchRules();
+      window.isStudioDirty = true;
+      window.saveFonts();
+    };
+
+    window.removeWatchRule = function(idx) {
+      if (idx < 0 || idx >= window.watchRules.length) return;
+      window.watchRules.splice(idx, 1);
+      window.renderWatchRules();
+      window.isStudioDirty = true;
+      window.saveFonts();
+    };
+
+    async function watchBotCall(path, body) {
+      var res = await fetch(path, { method: 'POST', headers: authHeaders(), body: JSON.stringify(body || {}) });
+      var data = await res.json().catch(function() { return {}; });
+      return { ok: res.ok && data.ok, data: data };
+    }
+
+    window.doConnectWatchBot = async function() {
+      var inp = document.getElementById('watchBotTokenInput');
+      var token = inp ? inp.value.trim() : '';
+      if (!token) { showToast('توکن ربات اعلان را وارد کنید', 'error'); return; }
+      var btn = document.getElementById('btnWatchBotConnect');
+      btn.disabled = true;
+      try {
+        var r = await watchBotCall('/api/telegram/watch-bot/connect', { token: token });
+        if (r.ok) {
+          inp.value = '';
+          window.setWatchBotStatus(true, r.data.watchAlerts && r.data.watchAlerts.botUsername);
+          var chatInp = document.getElementById('watchChatIdInput');
+          if (chatInp && !chatInp.value && r.data.watchAlerts) chatInp.value = r.data.watchAlerts.chatId || '';
+          showToast('ربات اعلان متصل شد 🔔', 'success');
+        } else {
+          showToast(r.data.error || 'خطا در اتصال ربات اعلان', 'error');
+        }
+      } catch (e) {
+        showToast('خطای شبکه', 'error');
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
+    window.doDisconnectWatchBot = async function() {
+      if (!confirm('ربات اعلان قطع شود؟ قوانین پایش حفظ می‌شوند ولی اعلانی ارسال نخواهد شد.')) return;
+      try {
+        var r = await watchBotCall('/api/telegram/watch-bot/disconnect');
+        if (r.ok) {
+          window.setWatchBotStatus(false);
+          var tg = document.getElementById('watchEnabledToggle');
+          if (tg) tg.checked = false;
+          showToast('ربات اعلان قطع شد', 'success');
+        } else {
+          showToast(r.data.error || 'خطا در قطع ربات اعلان', 'error');
+        }
+      } catch (e) {
+        showToast('خطای شبکه', 'error');
+      }
+    };
+
+    window.doTestWatchBot = async function() {
+      try {
+        await window.saveFonts();
+        var r = await watchBotCall('/api/telegram/watch-bot/test');
+        showToast(r.ok ? 'پیام آزمایشی ارسال شد ✅' : (r.data.error || 'ارسال ناموفق بود'), r.ok ? 'success' : 'error');
+      } catch (e) {
+        showToast('خطای شبکه', 'error');
+      }
+    };
+
+    var watchChatInp = document.getElementById('watchChatIdInput');
+    if (watchChatInp) watchChatInp.addEventListener('change', function() { window.saveFonts(); });
+
     // ذخیره آنی و خودکار تغییر وضعیت سوئیچ‌های استودیو (نجات مدیا، منشی، سکوت، بیوگرافی، خواب و ربات)
-    ['afkEnabledToggle', 'muteEnabledToggle', 'bioEnabledToggle', 'sleepEnabledToggle', 'toggle12h', 'botAntiDeleteToggle', 'botAntiEditToggle', 'botForwardTtlToggle', 'ghostModeToggle', 'aiReplyToggle'].forEach(function(toggleId) {
+    ['afkEnabledToggle', 'muteEnabledToggle', 'bioEnabledToggle', 'sleepEnabledToggle', 'toggle12h', 'botAntiDeleteToggle', 'botAntiEditToggle', 'botForwardTtlToggle', 'ghostModeToggle', 'aiReplyToggle', 'watchEnabledToggle'].forEach(function(toggleId) {
       var el = document.getElementById(toggleId);
       if (el) {
         el.addEventListener('change', function() {
@@ -10116,6 +10367,9 @@ export function panelHTML(env, options = {}) {
             if (data.aiCooldown !== undefined) setSafeValue('aiCooldownSelect', String(data.aiCooldown));
             setSafeValue('aiIgnoredUsersInput', Array.isArray(data.aiIgnoredUsers) ? data.aiIgnoredUsers.join(', ') : (data.aiIgnoredUsers || ''));
             if (window.syncAiIgnoredChipsFromInput) window.syncAiIgnoredChipsFromInput();
+
+            // 🔔 بارگذاری اعلان چت‌ها (Watch Alerts)
+            if (window.applyWatchAlertsData) window.applyWatchAlertsData(data.watchAlerts, data.userId || (data.bot && data.bot.ownerId));
 
             // 🔐 بارگذاری وضعیت ۲FA (تنها در صورتی که کاربر وسط راه‌اندازی و اسکن ۲FA نباشد)
             if (window.updateTotpUI) {
