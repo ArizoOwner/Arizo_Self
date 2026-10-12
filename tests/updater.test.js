@@ -297,3 +297,103 @@ describe('Updater — panel UI', () => {
     assert(html.includes('System &amp; Updates') || html.includes('System & Updates'));
   });
 });
+
+describe('Updater — stored tokens & automatic updates', () => {
+  const body = o => JSON.stringify(o);
+
+  it('should store tokens encrypted, never expose them, and update without re-entering a token', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.91');
+    resetReleaseCache();
+    const net = mockNetwork();
+    try {
+      const c = await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: body({ cfToken: CF_TOKEN, ghToken: GH_TOKEN }) }), env);
+      assertEqual(c.status, 200);
+      const raw = await env.KV.get('updater:creds');
+      assert(raw && raw.startsWith('v2:'), 'creds must be stored encrypted');
+      assert(!raw.includes(CF_TOKEN) && !raw.includes(GH_TOKEN));
+
+      const sText = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).text();
+      const s = JSON.parse(sText);
+      assertEqual(s.connected, true);
+      assertEqual(s.hasGh, true);
+      assertEqual(s.workerName, 'mypanel');
+      assert(!sText.includes(CF_TOKEN) && !sText.includes(GH_TOKEN), 'tokens must never be returned');
+
+      const a = await worker.fetch(adminReq('/api/admin/update/apply', token, { method: 'POST', body: '{}' }), env);
+      assertEqual(a.status, 200);
+      const out = await a.json();
+      assertEqual(out.ok, true);
+      assertEqual(out.runner, 'ok');
+      assert(net.calls.some(c => c.method === 'PUT' && c.u.endsWith('/workers/scripts/mypanel/content')));
+      assert(net.calls.some(c => c.u.endsWith('/telegram-clock.yml/dispatches')));
+    } finally { net.restore(); resetReleaseCache(); }
+  });
+
+  it('should refuse to store a token that cannot see the worker, and refuse stored apply when not connected', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.92');
+    const net = mockNetwork({ scripts: ['other'] });
+    try {
+      const c = await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: body({ cfToken: CF_TOKEN }) }), env);
+      assertEqual((await c.json()).code, 'worker_not_found');
+      assertEqual(await env.KV.get('updater:creds'), null);
+      const a = await worker.fetch(adminReq('/api/admin/update/apply', token, { method: 'POST', body: '{}' }), env);
+      assertEqual((await a.json()).code, 'not_connected');
+      const t = await worker.fetch(adminReq('/api/admin/update/auto', token, { method: 'POST', body: body({ enabled: true }) }), env);
+      assertEqual(t.status, 409);
+    } finally { net.restore(); }
+  });
+
+  it('should install a newer release automatically from the cron and skip when up to date', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.93');
+    resetReleaseCache();
+    let net = mockNetwork();
+    try {
+      await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: body({ cfToken: CF_TOKEN }) }), env);
+      await worker.fetch(adminReq('/api/admin/update/auto', token, { method: 'POST', body: body({ enabled: true }) }), env);
+      globalThis.__updNext = 0;
+      const pending = [];
+      await worker.scheduled({}, env, { waitUntil: p => pending.push(p) });
+      await Promise.all(pending);
+      assert(net.calls.some(c => c.method === 'PUT' && c.u.endsWith('/workers/scripts/mypanel/content')), 'auto update should replace the code');
+      const st = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json();
+      assertEqual(st.lastResult.ok, true);
+      assertEqual(st.lastResult.source, 'auto');
+      assertEqual(st.auto, true);
+
+      net.restore(); resetReleaseCache();
+      net = mockNetwork({ build: APP_BUILD });
+      await worker.fetch(adminReq('/api/admin/update/auto', token, { method: 'POST', body: body({ enabled: true }) }), env);
+      globalThis.__updNext = 0;
+      const p2 = [];
+      await worker.scheduled({}, env, { waitUntil: p => p2.push(p) });
+      await Promise.all(p2);
+      assertEqual(net.calls.filter(c => c.method === 'PUT').length, 0);
+    } finally { net.restore(); resetReleaseCache(); }
+  });
+
+  it('should forget everything on disconnect', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.94');
+    const net = mockNetwork();
+    try {
+      await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: body({ cfToken: CF_TOKEN }) }), env);
+      await worker.fetch(adminReq('/api/admin/update/disconnect', token, { method: 'POST', body: '{}' }), env);
+      const s = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json();
+      assertEqual(s.connected, false);
+      assertEqual(s.auto, false);
+      assertEqual(await env.KV.get('updater:creds'), null);
+    } finally { net.restore(); }
+  });
+
+  it('should keep the new endpoints admin-only', async () => {
+    const env = createEnv();
+    await registerOwner(env, '198.51.100.95');
+    for (const [path, method] of [['/api/admin/update/settings', 'GET'], ['/api/admin/update/connect', 'POST'], ['/api/admin/update/disconnect', 'POST'], ['/api/admin/update/auto', 'POST']]) {
+      const r = await worker.fetch(new Request('https://mypanel.acme.workers.dev' + path, { method, headers: { 'Content-Type': 'application/json' }, body: method === 'POST' ? '{}' : undefined }), env);
+      assertEqual(r.status, 401);
+    }
+  });
+});
