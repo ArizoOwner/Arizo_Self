@@ -3,16 +3,18 @@
 export const APP_NAME = 'Arizo Self';
 export const APP_VERSION = '3.6.2';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026101202;
+export const APP_BUILD = 2026101203;
 
 export const RELEASE_NOTES = {
   fa: [
+    'به‌روزرسانی خودکار: توکن یک بار (رمزنگاری‌شده) ذخیره می‌شود؛ سایت هر ۶ ساعت GitHub را می‌بیند و نسخهٔ جدید را خودکار نصب می‌کند',
     'بخش «سیستم و به‌روزرسانی» در پنل مدیریت: مشخصات سامانه، بررسی نسخهٔ جدید و به‌روزرسانی با یک کلیک',
     'ویزارد راه‌اندازی خودکار روی Cloudflare و GitHub بدون رمز مدیر؛ اولین کاربر مدیر کل می‌شود',
     'ساخت اولین حساب فقط با کد راه‌اندازی یک‌بار مصرف',
     'ویزارد روی Worker دیپلوی‌شده فقط «راه‌اندازی» می‌کند و دیتابیس‌های موجود را دوباره استفاده می‌کند'
   ],
   en: [
+    'Automatic updates: store the token once (encrypted); the site checks GitHub every 6 hours and installs new releases by itself',
     'New "System & Updates" tab in the admin panel: system specs, update check and one-click update',
     'Fully automated Cloudflare + GitHub setup wizard with no admin password; the first user becomes the owner',
     'The first account can only be created with a one-time setup code',
