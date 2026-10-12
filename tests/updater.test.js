@@ -440,3 +440,36 @@ describe('Updater — disconnect is immediate', () => {
     } finally { net.restore(); }
   });
 });
+
+describe('Updater — GitHub rate limits', () => {
+  it('should retry a 429 from GitHub and still read the release info', async () => {
+    resetReleaseCache();
+    const original = globalThis.fetch;
+    let n = 0;
+    globalThis.fetch = async (input) => {
+      const u = typeof input === 'string' ? input : input.url;
+      if (u === VERSION_INFO_URL) {
+        n++;
+        if (n < 3) return new Response('slow down', { status: 429 });
+        return json({ version: '9.9.9', channel: 'PRO', build: APP_BUILD + 1, sha256: 'a'.repeat(64), size: 1, publishedAt: 1, notes: { fa: [], en: [] } });
+      }
+      return original(input);
+    };
+    try {
+      const r = await checkForUpdate({ fresh: true });
+      assertEqual(r.updateAvailable, true);
+      assertEqual(n, 3);
+    } finally { globalThis.fetch = original; resetReleaseCache(); }
+  });
+
+  it('should give up with a clear error when GitHub keeps answering 429', async () => {
+    resetReleaseCache();
+    const original = globalThis.fetch;
+    globalThis.fetch = async () => new Response('no', { status: 429 });
+    try {
+      let code = '';
+      try { await checkForUpdate({ fresh: true }); } catch (e) { code = e.code; }
+      assertEqual(code, 'no_release_info');
+    } finally { globalThis.fetch = original; resetReleaseCache(); }
+  });
+});
