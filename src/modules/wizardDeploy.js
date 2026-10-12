@@ -150,20 +150,27 @@ export async function cfEnsureSubdomain(tokenRaw, accountId, subdomain) {
   return { subdomain: (res && res.subdomain) || name };
 }
 
+/** نام منابع: برای Worker پیش‌فرض نام‌های قدیمی؛ برای بقیه مشتق از نام Worker تا چند نصب با هم تداخل نکنند */
+export function resourceNames(workerName) {
+  if (workerName === 'arizo-self') return { kv: KV_TITLE, d1: D1_NAME };
+  return { kv: workerName + '-kv', d1: workerName.replace(/-/g, '_') + '_db' };
+}
+
 /** مرحلهٔ ۲: ساخت (یا استفادهٔ مجدد از) KV و D1 و تشخیص وجود Worker هم‌نام */
 export async function cfEnsureResources(tokenRaw, accountId, workerName) {
   const token = requireToken(tokenRaw, 'cf');
   validateWorkerName(workerName);
 
   const namespaces = await cfCall(token, `/accounts/${accountId}/storage/kv/namespaces?per_page=100`);
-  let kv = (namespaces || []).find(n => n.title === KV_TITLE);
+  const names = resourceNames(workerName);
+  let kv = (namespaces || []).find(n => n.title === names.kv);
   const kvReused = !!kv;
-  if (!kv) kv = await cfCall(token, `/accounts/${accountId}/storage/kv/namespaces`, { method: 'POST', body: { title: KV_TITLE } });
+  if (!kv) kv = await cfCall(token, `/accounts/${accountId}/storage/kv/namespaces`, { method: 'POST', body: { title: names.kv } });
 
   const databases = await cfCall(token, `/accounts/${accountId}/d1/database?per_page=100`);
-  let d1 = (databases || []).find(d => d.name === D1_NAME);
+  let d1 = (databases || []).find(d => d.name === names.d1);
   const d1Reused = !!d1;
-  if (!d1) d1 = await cfCall(token, `/accounts/${accountId}/d1/database`, { method: 'POST', body: { name: D1_NAME } });
+  if (!d1) d1 = await cfCall(token, `/accounts/${accountId}/d1/database`, { method: 'POST', body: { name: names.d1 } });
 
   const scripts = await cfCall(token, `/accounts/${accountId}/workers/scripts`);
   const workerExists = (scripts || []).some(s => s.id === workerName);
@@ -227,6 +234,55 @@ export async function cfDeployWorker(tokenRaw, accountId, { workerName, kvId, d1
   form.append('worker.js', new Blob([code], { type: 'application/javascript+module' }), 'worker.js');
   await cfCall(token, `/accounts/${accountId}/workers/scripts/${workerName}`, { method: 'PUT', form });
   return { workerName };
+}
+
+/** حالت «اتصال»: پیدا کردن اکانتی که Worker در حال اجرا در آن است */
+export async function cfLocateWorker(tokenRaw, workerName) {
+  const token = requireToken(tokenRaw, 'cf');
+  validateWorkerName(workerName);
+  const accounts = await cfCall(token, '/accounts?per_page=50');
+  for (const a of accounts || []) {
+    let scripts;
+    try {
+      scripts = await cfCall(token, `/accounts/${a.id}/workers/scripts`);
+    } catch (err) {
+      if (err instanceof WizardError && err.code === 'cf_auth') throw err;
+      continue;
+    }
+    if ((scripts || []).some(x => x.id === workerName)) return { accountId: a.id, accountName: a.name };
+  }
+  throw new WizardError('worker_not_found',
+    'Worker با نام «' + workerName + '» در اکانت‌های این توکن پیدا نشد. نام را بررسی کنید و توکنِ همان اکانتی را بدهید که Worker را در آن ساخته‌اید.',
+    'No Worker named "' + workerName + '" was found in the accounts of this token. Check the name and use a token from the account that owns the Worker.', 404);
+}
+
+/** حالت «اتصال»: بایندینگ‌ها و رمزها را روی همین Worker در حال اجرا ثبت می‌کند (بدون آپلود دوبارهٔ کد) */
+export async function cfAttachWorker(tokenRaw, accountId, { workerName, kvId, d1Id, adminPassword, runnerSecret }) {
+  const token = requireToken(tokenRaw, 'cf');
+  validateWorkerName(workerName);
+  if (!kvId || !d1Id) throw new WizardError('bad_request', 'شناسه KV یا D1 ارسال نشده است.', 'KV or D1 id is missing.');
+  if (String(adminPassword || '').length < 16 || String(runnerSecret || '').length < 16) {
+    throw new WizardError('weak_secret', 'رمزها باید حداقل ۱۶ کاراکتر باشند.', 'Secrets must be at least 16 characters long.');
+  }
+  const path = `/accounts/${accountId}/workers/scripts/${workerName}/settings`;
+  const current = await cfCall(token, path);
+  const existing = Array.isArray(current && current.bindings) ? current.bindings : [];
+  const has = n => existing.some(b => b.name === n);
+  const keepOwn = new Set(['KV', 'DB', 'API_ID', 'API_HASH'].filter(has));
+  const replaced = new Set(['ADMIN_PASSWORD', 'RUNNER_SECRET']);
+  const bindings = [
+    ...existing.filter(b => !replaced.has(b.name)).map(b => ({ type: 'inherit', name: b.name })),
+    ...buildWorkerMetadata({ kvId, d1Id, adminPassword, runnerSecret }).bindings.filter(b => !keepOwn.has(b.name))
+  ];
+  const settings = {
+    bindings,
+    compatibility_flags: [...new Set([...(current.compatibility_flags || []), 'nodejs_compat'])]
+  };
+  if (!current.compatibility_date) settings.compatibility_date = COMPAT_DATE;
+  const form = new FormData();
+  form.append('settings', new Blob([JSON.stringify(settings)], { type: 'application/json' }));
+  await cfCall(token, path, { method: 'PATCH', form });
+  return { workerName, keptKv: has('KV'), keptDb: has('DB') };
 }
 
 const D1_SCHEMA = `CREATE TABLE IF NOT EXISTS kv_store (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER, updated_at INTEGER);
@@ -391,6 +447,10 @@ export async function handleWizardApi(step, body = {}, options = {}) {
         return ok(await cfVerify(b.token));
       case 'cloudflare/subdomain':
         return ok(await cfEnsureSubdomain(b.token, str(b.accountId), b.subdomain));
+      case 'cloudflare/locate':
+        return ok(await cfLocateWorker(b.token, b.workerName));
+      case 'cloudflare/attach':
+        return ok(await cfAttachWorker(b.token, str(b.accountId), pick(b, ['workerName', 'kvId', 'd1Id', 'adminPassword', 'runnerSecret'])));
       case 'cloudflare/resources':
         return ok(await cfEnsureResources(b.token, str(b.accountId), b.workerName));
       case 'cloudflare/deploy':
