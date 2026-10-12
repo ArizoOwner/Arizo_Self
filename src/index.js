@@ -592,7 +592,7 @@ export default {
       }
     }
 
-    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/admin' || url.pathname === '/admin/') && await isWizardIncomplete(env)) {
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/admin' || url.pathname === '/admin/') && await isWizardIncomplete(env).catch(() => true)) {
       return new Response(null, { status: 302, headers: { 'Location': '/setup?required=1', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
     }
 
