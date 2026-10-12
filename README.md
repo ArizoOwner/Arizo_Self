@@ -486,7 +486,7 @@ graph TD
    git clone https://github.com/ArizoOwner/Arizo_Self.git
    cd Arizo_Self
    ```
-2. شناسهٔ KV و D1 خودتان را در `wrangler.toml` بگذارید، سپس `npx wrangler secret put RUNNER_SECRET` را اجرا کنید.
+2. فایل `wrangler.toml.example` را به `wrangler.toml` کپی کنید، شناسهٔ KV و D1 خودتان را در آن بگذارید و سپس `npx wrangler secret put RUNNER_SECRET` را اجرا کنید.
 3. `npx wrangler deploy` را بزنید و در ریپوی گیت‌هاب، Secrets با نام‌های `CLOUDFLARE_URL` و `RUNNER_SECRET` بسازید و چرخهٔ `⚡ Telegram Clock Engine` را در تب **Actions** فعال کنید.
 
 #### 🤖 &nbsp; فعال‌سازی ربات و لاگر اختصاصی تلگرام
