@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 130" width="100%" role="img" aria-label="Arizo Self flow">
+<defs>
+<linearGradient id="l2" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#38bdf8"/><stop offset="1" stop-color="#c084fc"/></linearGradient>
+<linearGradient id="bg2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#070a16"/><stop offset="1" stop-color="#120b24"/></linearGradient>
+<filter id="g2" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="3" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<style>text{font-family:'Segoe UI','Vazirmatn','Tahoma',system-ui,sans-serif}.a{font-size:14px;font-weight:700;fill:#f1f5f9}.b{font-size:11.5px;fill:#94a3b8}</style>
+</defs>
+<rect width="1000" height="130" rx="22" fill="url(#bg2)"/>
+<rect x="1" y="1" width="998" height="128" rx="21" fill="none" stroke="#818cf8" stroke-opacity=".22"/>
+<path d="M 100 52 L 900 52" stroke="#334155" stroke-width="2" fill="none"/>
+  <path d="M 100 52 L 900 52" stroke="url(#l2)" stroke-width="3" stroke-dasharray="8 12" fill="none"><animate attributeName="stroke-dashoffset" values="20;0" dur="1s" repeatCount="indefinite"/></path>
+  <circle r="6" fill="#38bdf8" filter="url(#g2)"><animateMotion dur="5s" repeatCount="indefinite" path="M 100 52 L 900 52"/></circle><g>
+      <circle cx="100" cy="52" r="26" fill="#0d1224" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.5"/>
+      <circle cx="100" cy="52" r="26" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="url(#g2)"><animate attributeName="stroke-opacity" values=".05;1;.05" dur="5s" begin="0s" repeatCount="indefinite"/></circle>
+      <text x="100" y="60" font-size="22" text-anchor="middle">👤</text>
+      <text x="100" y="100" class="a" text-anchor="middle">You</text>
+      <text x="100" y="118" class="b" text-anchor="middle">Sign up &amp; log in</text>
+    </g><g>
+      <circle cx="300" cy="52" r="26" fill="#0d1224" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.5"/>
+      <circle cx="300" cy="52" r="26" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="url(#g2)"><animate attributeName="stroke-opacity" values=".05;1;.05" dur="5s" begin="1s" repeatCount="indefinite"/></circle>
+      <text x="300" y="60" font-size="22" text-anchor="middle">☁️</text>
+      <text x="300" y="100" class="a" text-anchor="middle">Cloudflare</text>
+      <text x="300" y="118" class="b" text-anchor="middle">Secure storage</text>
+    </g><g>
+      <circle cx="500" cy="52" r="26" fill="#0d1224" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.5"/>
+      <circle cx="500" cy="52" r="26" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="url(#g2)"><animate attributeName="stroke-opacity" values=".05;1;.05" dur="5s" begin="2s" repeatCount="indefinite"/></circle>
+      <text x="500" y="60" font-size="22" text-anchor="middle">🔄</text>
+      <text x="500" y="100" class="a" text-anchor="middle">Runner</text>
+      <text x="500" y="118" class="b" text-anchor="middle">Every 10 seconds</text>
+    </g><g>
+      <circle cx="700" cy="52" r="26" fill="#0d1224" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.5"/>
+      <circle cx="700" cy="52" r="26" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="url(#g2)"><animate attributeName="stroke-opacity" values=".05;1;.05" dur="5s" begin="3s" repeatCount="indefinite"/></circle>
+      <text x="700" y="60" font-size="22" text-anchor="middle">🔌</text>
+      <text x="700" y="100" class="a" text-anchor="middle">Warm socket</text>
+      <text x="700" y="118" class="b" text-anchor="middle">MTProto</text>
+    </g><g>
+      <circle cx="900" cy="52" r="26" fill="#0d1224" stroke="#818cf8" stroke-opacity=".5" stroke-width="1.5"/>
+      <circle cx="900" cy="52" r="26" fill="none" stroke="#38bdf8" stroke-width="2.5" filter="url(#g2)"><animate attributeName="stroke-opacity" values=".05;1;.05" dur="5s" begin="4s" repeatCount="indefinite"/></circle>
+      <text x="900" y="60" font-size="22" text-anchor="middle">📱</text>
+      <text x="900" y="100" class="a" text-anchor="middle">Telegram</text>
+      <text x="900" y="118" class="b" text-anchor="middle">Live clock &amp; bio</text>
+    </g>
+</svg>
