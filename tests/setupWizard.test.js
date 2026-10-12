@@ -577,3 +577,59 @@ describe('Setup Wizard — user-deployed workers use connect mode (no "install",
     } finally { net.restore(); }
   });
 });
+
+describe('Wizard — unfinished setup must not expose the panel', () => {
+  function envWith({ setupCode = 'CodeFromWizard1234567890abcdef', marker = false, withDb = true } = {}) {
+    const env = { ...createEnv(), SETUP_CODE: setupCode };
+    if (withDb) {
+      env.DB = {
+        prepare(q) {
+          return { bind() { return this; }, async first() { return q.includes("setup:complete") && marker ? { x: 1 } : null; }, async run() { return { success: true }; }, async all() { return { results: [] }; } };
+        }
+      };
+    }
+    return env;
+  }
+  const get = (env, p) => worker.fetch(new Request('https://arizo.jt2.workers.dev' + p), env);
+
+  it('should redirect / and /admin to /setup while the wizard has not finished', async () => {
+    for (const p of ['/', '/admin']) {
+      const res = await get(envWith(), p);
+      assertEqual(res.status, 302);
+      assertEqual(res.headers.get('Location'), '/setup');
+    }
+  });
+
+  it('should serve the panel once the wizard finalize step wrote the completion marker', async () => {
+    const res = await get(envWith({ marker: true }), '/');
+    assertEqual(res.status, 200);
+  });
+
+  it('should serve the panel when an account already exists (older installs)', async () => {
+    const env = envWith();
+    await env.KV.put('users_list', JSON.stringify(['boss']));
+    assertEqual((await get(env, '/')).status, 200);
+  });
+
+  it('should also guard workers whose bindings were attached without the wizard (no SETUP_CODE)', async () => {
+    const env = envWith({ setupCode: '' });
+    delete env.SETUP_CODE;
+    const res = await get(env, '/');
+    assertEqual(res.status, 302);
+    assertEqual(res.headers.get('Location'), '/setup');
+  });
+
+  it('should never trap a worker that has no D1 to hold the marker', async () => {
+    assertEqual((await get({ ...createEnv() }, '/')).status, 200);
+    assertEqual((await get(envWith({ withDb: false }), '/')).status, 200);
+  });
+
+  it('should write the completion marker in the finalize step', async () => {
+    const net = mockNetwork();
+    try {
+      await handleWizardApi('cloudflare/finalize', { token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel', d1Id: 'd1New' });
+      const q = net.calls.find(c => c.u.endsWith('/d1/database/d1New/query'));
+      assert(q && String(q.body).includes('setup:complete'));
+    } finally { net.restore(); }
+  });
+});
