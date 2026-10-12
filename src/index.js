@@ -546,7 +546,7 @@ export default {
 
     // 🚀 ویزارد تعاملی و گرافیکی ستاپ و راه‌اندازی شخصی (Self-Hosting Setup Wizard)
     if (url.pathname === '/setup' || url.pathname === '/wizard') {
-      const etag = '"arizo-wiz-v3.6.0-opt"';
+      const etag = '"arizo-wiz-v3.6.2-placeholders"';
       if (etagMatches(request.headers.get('if-none-match'), etag)) {
         return new Response(null, {
           status: 304,
