@@ -453,10 +453,10 @@ graph TD
    - **GitHub:** `repo` and `workflow` scopes (for the 24/7 runner; optional)
 5. Click **"Connect and set up"**. The wizard will, in order:
    - find your Worker in the account, create KV and D1 and attach them to that very Worker;
-   - generate the admin and runner passwords in your browser and store them as Secrets;
+   - generate a dedicated runner secret in your browser and store it as a Secret (there is no admin password);
    - set the per-minute cron, the workers.dev domain and the database tables;
    - fork the project, store the runner secrets with encryption and start the runner.
-6. At the end the panel URL and admin password are shown; save them right away (the password cannot be displayed again).
+6. At the end click **"Create the owner account"** and register on the site. **The first user to register becomes the owner**: lifetime plan, no license code needed, and the **"Admin panel"** button appears in the same site. Register yourself right away.
 
 > [!NOTE]
 > Tokens are used only on that page and are never stored. Every step is repeatable; on error just press "Retry". Once set up, `/` serves the panel.
@@ -468,7 +468,7 @@ graph TD
    git clone https://github.com/ArizoOwner/Arizo_Self.git
    cd Arizo_Self
    ```
-2. Put your own KV and D1 ids in `wrangler.toml`, then run `npx wrangler secret put ADMIN_PASSWORD` and `npx wrangler secret put RUNNER_SECRET`.
+2. Put your own KV and D1 ids in `wrangler.toml`, then run `npx wrangler secret put RUNNER_SECRET`.
 3. Run `npx wrangler deploy`, create the GitHub repository secrets `CLOUDFLARE_URL` and `RUNNER_SECRET`, and enable the `⚡ Telegram Clock Engine` workflow under **Actions**.
 
 #### 🤖 &nbsp; Helper Bot & Logger Activation
