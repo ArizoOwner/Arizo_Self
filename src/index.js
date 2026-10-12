@@ -254,8 +254,12 @@ function getUnifiedStorage(env) {
 // فقط سایت رسمی نصب‌کننده، Workerِ تازه می‌سازد؛ هر Worker دیگری که کاربر خودش دیپلوی کرده فقط «راه‌اندازی» می‌شود
 const OFFICIAL_WIZARD_HOSTS = new Set(['arizo-self.arizosupport.workers.dev']);
 
+// وضعیت بایندینگ‌ها یک‌بار و پیش از آنکه initEnvStorage چیزی روی env بگذارد ثبت می‌شود؛
+// env بین درخواست‌های یک isolate مشترک است و بدون این کار از درخواست دوم، Worker خام «راه‌اندازی‌شده» دیده می‌شد.
 function isSetupRequired(env) {
-  return !env || (!env.KV && !env.DB);
+  if (!env) return true;
+  if (env._hasBindings === undefined) env._hasBindings = !!(env.KV || env.DB);
+  return !env._hasBindings;
 }
 
 // Worker دارای D1 که ویزارد را کامل نکرده (setup:complete ندارد) و هنوز کاربری هم ندارد → پنل نباید باز شود
@@ -281,7 +285,7 @@ export function resetStorageCachesForTests() {
 }
 
 function initEnvStorage(env) {
-  if (!env) return;
+  if (!env || isSetupRequired(env)) return;
   if (!env.KV_RAW) {
     env.KV_RAW = env.KV;
     env.KV = getUnifiedStorage(env);
@@ -581,14 +585,14 @@ export default {
       const wizardPath = p === '/setup' || p === '/wizard' || p.startsWith('/api/setup/');
       if (!wizardPath && p !== '/favicon.ico' && p !== '/favicon.svg') {
         if (request.method === 'GET' && (p === '/' || p === '/admin' || p === '/admin/')) {
-          return new Response(null, { status: 302, headers: { 'Location': '/setup', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
+          return new Response(null, { status: 302, headers: { 'Location': '/setup?required=1', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
         }
         return json({ ok: false, error: 'setup_required', setup: '/setup', fa: 'این Worker هنوز راه‌اندازی نشده است؛ ویزارد /setup را باز کنید.', en: 'This Worker is not set up yet; open the /setup wizard.' }, 503, { 'Cache-Control': 'no-store' });
       }
     }
 
     if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/admin' || url.pathname === '/admin/') && await isWizardIncomplete(env)) {
-      return new Response(null, { status: 302, headers: { 'Location': '/setup', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
+      return new Response(null, { status: 302, headers: { 'Location': '/setup?required=1', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
     }
 
     // ۱. سرو رابط کاربری پنل با اعتبارسنجی شرطی ETag و کش هوشمند RAM
