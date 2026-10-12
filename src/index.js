@@ -1127,7 +1127,7 @@ export default {
     // آیا هنوز هیچ حسابی ساخته نشده؟ (اولین ثبت‌نام‌کننده مدیر کل می‌شود)
     if (url.pathname === '/api/bootstrap' && request.method === 'GET') {
       const list = await env.KV.get('users_list', 'json') || [];
-      return json({ ok: true, firstAdmin: list.length === 0 }, 200, { 'Cache-Control': 'no-store' });
+      return json({ ok: true, firstAdmin: list.length === 0, needsCode: list.length === 0 && !!env.SETUP_CODE }, 200, { 'Cache-Control': 'no-store' });
     }
 
     // ثبت‌نام کاربر جدید با الزامی بودن کد لایسنس/ردیم
@@ -1138,7 +1138,7 @@ export default {
       }
 
       try {
-        const { username, password, licenseCode } = await request.json();
+        const { username, password, licenseCode, setupCode } = await request.json();
         const cleanUser = String(username || '').trim().toLowerCase();
         const rawPass = String(password || '');
         let cleanCode = String(licenseCode || '').trim().toUpperCase();
@@ -1168,6 +1168,18 @@ export default {
         let durationDays = 30;
         let subscriptionUntil = Date.now() + 30 * 86400 * 1000;
         let userRole = isFirstUser ? 'admin' : 'user';
+
+        if (isFirstUser && env.SETUP_CODE) {
+          const given = String(setupCode || '').trim();
+          const okCode = given.length > 0 && await timingSafeStringCompare(given, String(env.SETUP_CODE));
+          if (!okCode) {
+            return json({
+              error: given ? 'کد راه‌اندازی نادرست است.' : 'برای ساخت اولین حساب (مدیر کل) کد راه‌اندازی لازم است؛ همان لینکی را که ویزارد داد باز کنید.',
+              errorEn: given ? 'The setup code is incorrect.' : 'The setup code is required to create the first (owner) account; open the link the wizard gave you.',
+              code: 'setup_code_required'
+            }, 403);
+          }
+        }
 
         if (isFirstUser) {
           // کاربر نخست به عنوان مدیر ارشد با پلن دائمی نامحدود ثبت می‌شود
