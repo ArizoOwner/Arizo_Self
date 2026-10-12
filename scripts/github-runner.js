@@ -46,7 +46,7 @@ for (const level of ['log', 'info', 'warn', 'error']) {
 }
 
 const CLOUDFLARE_URL = (process.env.CLOUDFLARE_URL || 'https://arizo-self.arizosupport.workers.dev').replace(/\/+$/, '');
-const RUNNER_SECRET = process.env.RUNNER_SECRET || process.env.ADMIN_PASSWORD;
+const RUNNER_SECRET = process.env.RUNNER_SECRET;
 if (!RUNNER_SECRET) {
   console.error('❌ Error: RUNNER_SECRET environment variable is required.');
   process.exit(1);
@@ -64,7 +64,7 @@ if (!CLOUDFLARE_URL) {
 }
 
 if (!RUNNER_SECRET) {
-  console.error('❌ Error: RUNNER_SECRET or ADMIN_PASSWORD environment variable is required.');
+  console.error('❌ Error: RUNNER_SECRET environment variable is required.');
   process.exit(1);
 }
 
