@@ -250,7 +250,14 @@ function getUnifiedStorage(env) {
 }
 
 function isSetupRequired(env) {
-  return !env || !env.ADMIN_PASSWORD || (!env.KV && !env.DB);
+  return !env || (!env.KV && !env.DB);
+}
+
+export function resetStorageCachesForTests() {
+  storageMemCache.clear();
+  authTokensCache.clear();
+  activeUsersCache = null;
+  activeUsersCacheTime = 0;
 }
 
 function initEnvStorage(env) {
@@ -416,16 +423,12 @@ async function getAdminAuth(request, env) {
   }
   if (!token) return false;
 
-  // ۱. بررسی سشن مستقیم ادمین مستر
-  const adminSession = await env.KV.get('admin_token:' + token);
-  if (adminSession) return true;
-
-  // ۲. بررسی توکن کاربری کاربرانی که سطح دسترسی ادمین دارند
+  // مدیر بودن فقط از نقش کاربر می‌آید؛ اولین کاربر ثبت‌نام‌شده مدیر کل است
   const sessionData = await env.KV.get('token:' + token, 'json');
   if (sessionData && sessionData.username) {
     const userData = await env.KV.get('user:' + sessionData.username, 'json');
     if (userData) {
-      if (userData.role === 'admin' || sessionData.username === 'amirmaster' || sessionData.username === 'admin') {
+      if (userData.role === 'admin') {
         return true;
       }
     }
@@ -439,7 +442,7 @@ async function getAdminAuth(request, env) {
  */
 export function checkUserSubscription(user) {
   if (!user) return { active: false, reason: 'کاربر نامعتبر است' };
-  if (user.role === 'admin' || user.username === 'amirmaster' || user.username === 'admin') {
+  if (user.role === 'admin') {
     return { active: true, isLifetime: true, plan: 'lifetime', planName: user.planName || 'دائمی و نامحدود (مدیر ارشد)', remainingDays: 9999, remainingMs: Infinity };
   }
   const plan = user.plan || '1_month';
@@ -551,7 +554,7 @@ export default {
       return cachedFaviconResponse.clone();
     }
 
-    // 🧭 Worker بدون KV/D1/رمز مدیر (دیپلوی خام worker.js): پنل به ویزارد هدایت می‌شود و بقیهٔ مسیرها تا پایان راه‌اندازی بسته‌اند
+    // 🧭 Worker بدون KV/D1 (دیپلوی خام worker.js): پنل به ویزارد هدایت می‌شود و بقیهٔ مسیرها تا پایان راه‌اندازی بسته‌اند
     if (needsSetup) {
       const p = url.pathname;
       const wizardPath = p === '/setup' || p === '/wizard' || p.startsWith('/api/setup/');
@@ -661,51 +664,6 @@ export default {
     // ==========================================
     // 👑 بخش پنل مدیریت ادمین (Admin Management)
     // ==========================================
-
-    // ورود به پنل ادمین با مستر پسورد
-    if (url.pathname === '/api/admin/login' && request.method === 'POST') {
-      const rl = await checkRateLimit(env, `rl:admin:${clientIP}`, 5, 300);
-      if (!rl.allowed) {
-        return json({ error: 'تلاش بیش از حد برای ورود به پنل مدیریت. لطفاً ۵ دقیقه دیگر تلاش کنید.' }, 429);
-      }
-
-      try {
-        const { password } = await request.json();
-        const expectedPassword = env.ADMIN_PASSWORD;
-
-        if (!expectedPassword) {
-          return json({ error: 'رمز عبور مدیریت در سرور تنظیم نشده است.' }, 500);
-        }
-
-        const isMatch = await timingSafeStringCompare(String(password || ''), expectedPassword);
-        if (!isMatch) {
-          return json({ error: 'رمز عبور مدیریت نادرست است.' }, 401);
-        }
-
-        const adminToken = generateRandomHex(32);
-        await env.KV.put('admin_token:' + adminToken, JSON.stringify({
-          role: 'superadmin',
-          createdAt: Date.now(),
-          ip: clientIP
-        }), {
-          expirationTtl: 14 * 86400 // انقضای ۱۴ روزه
-        });
-
-        return json({ ok: true, token: adminToken });
-      } catch (err) {
-        return json({ error: 'خطا در احراز هویت مدیریت' }, 500);
-      }
-    }
-
-    // خروج از حساب مدیریت و باطل‌سازی سشن
-    if (url.pathname === '/api/admin/logout' && request.method === 'POST') {
-      const authHeader = request.headers.get('Authorization') || '';
-      if (authHeader.startsWith('Bearer ')) {
-        const token = authHeader.slice(7).trim();
-        await env.KV.delete('admin_token:' + token);
-      }
-      return json({ ok: true });
-    }
 
     // دریافت آمار سیستم برای ادمین
     if (url.pathname === '/api/admin/stats' && request.method === 'GET') {
@@ -899,7 +857,7 @@ export default {
             validUsersList.push(uname);
             const sub = checkUserSubscription(u);
             const isSuspended = !sub.active || u.isSuspended;
-            const isOwner = cleanUname === 'amirmaster' || cleanUname === 'admin' || (usersList.length > 0 && cleanUname === usersList[0].toLowerCase());
+            const isOwner = usersList.length > 0 && cleanUname === usersList[0].toLowerCase();
             const isUserAdmin = isOwner || u.role === 'admin';
             return {
               username: uname,
@@ -965,7 +923,7 @@ export default {
         const cleanUser = String(username || '').trim().toLowerCase();
 
         let usersList = await env.KV.get('users_list', 'json') || [];
-        const isRootOwner = cleanUser === 'amirmaster' || cleanUser === 'admin' || (usersList.length > 0 && cleanUser === usersList[0].toLowerCase());
+        const isRootOwner = usersList.length > 0 && cleanUser === usersList[0].toLowerCase();
 
         // 🛡️ گارد امنیتی غیرقابل نفوذ: جلوگیری از حذف، تعلیق یا تنزل ادمین اولیه / مالک اصلی
         if (isRootOwner && (action === 'delete' || action === 'toggle_role' || action === 'demote_admin' || action === 'toggle_suspend')) {
@@ -1009,7 +967,7 @@ export default {
         }
 
         if (action === 'toggle_role' || action === 'promote_admin' || action === 'demote_admin') {
-          const currentRole = userData.role || (cleanUser === 'amirmaster' || cleanUser === 'admin' ? 'admin' : 'user');
+          const currentRole = userData.role || 'user';
           if (action === 'promote_admin') {
             userData.role = 'admin';
           } else if (action === 'demote_admin') {
@@ -1166,6 +1124,12 @@ export default {
     // 👤 بخش مدیریت کاربران (ثبت‌نام، ورود، تمدید)
     // ==========================================
 
+    // آیا هنوز هیچ حسابی ساخته نشده؟ (اولین ثبت‌نام‌کننده مدیر کل می‌شود)
+    if (url.pathname === '/api/bootstrap' && request.method === 'GET') {
+      const list = await env.KV.get('users_list', 'json') || [];
+      return json({ ok: true, firstAdmin: list.length === 0 }, 200, { 'Cache-Control': 'no-store' });
+    }
+
     // ثبت‌نام کاربر جدید با الزامی بودن کد لایسنس/ردیم
     if (url.pathname === '/api/user/register' && request.method === 'POST') {
       const rl = await checkRateLimit(env, `rl:reg:${clientIP}`, 5, 900);
@@ -1205,7 +1169,7 @@ export default {
         let subscriptionUntil = Date.now() + 30 * 86400 * 1000;
         let userRole = isFirstUser ? 'admin' : 'user';
 
-        if (isFirstUser && (!cleanCode || cleanCode === 'ADMIN' || cleanCode === 'FIRST')) {
+        if (isFirstUser) {
           // کاربر نخست به عنوان مدیر ارشد با پلن دائمی نامحدود ثبت می‌شود
           plan = 'lifetime';
           planName = 'دائمی و نامحدود (مدیر ارشد)';
@@ -1399,7 +1363,7 @@ export default {
           expirationTtl: 30 * 86400
         });
 
-        const isUserAdmin = userData.role === 'admin' || cleanUser === 'amirmaster' || cleanUser === 'admin';
+        const isUserAdmin = userData.role === 'admin';
         return json({ ok: true, token, username: cleanUser, role: isUserAdmin ? 'admin' : 'user', isAdmin: isUserAdmin });
       } catch (err) {
         return json({ error: err.message || 'خطا در ورود به حساب' }, 500);
@@ -1545,7 +1509,7 @@ export default {
         }
       }
 
-      const isUserAdmin = auth.user.role === 'admin' || auth.username === 'amirmaster' || auth.username === 'admin';
+      const isUserAdmin = auth.user.role === 'admin';
 
       const liveStatus = {
         lastTime: (auth.user.telegram?.enabled && !auth.user.status?.error)
@@ -2319,7 +2283,7 @@ export default {
       if (authHeader.startsWith('Bearer ')) {
         token = authHeader.slice(7).trim();
       }
-      const secret = workerEnv.RUNNER_SECRET || workerEnv.ADMIN_PASSWORD;
+      const secret = workerEnv.RUNNER_SECRET;
       if (!secret || !token) return false;
       return await timingSafeStringCompare(token, secret);
     }
