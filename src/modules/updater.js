@@ -189,8 +189,10 @@ export async function saveCreds(env, { cfToken, ghToken, repo, workerName }) {
   globalThis.__updNext = 0;
 }
 
+// حذف از KV تا حدود یک دقیقه مقدار قدیمی را برمی‌گرداند و لایهٔ ذخیره‌سازی آن را دوباره به D1 می‌نویسد؛
+// به‌جای حذف، مقدار خالی نوشته می‌شود تا همه‌جا فوراً «بدون توکن» دیده شود.
 export async function clearCreds(env) {
-  await env.KV.delete(CREDS_KEY);
+  await env.KV.put(CREDS_KEY, '');
   await putUpdaterState(env, { auto: false });
 }
 
