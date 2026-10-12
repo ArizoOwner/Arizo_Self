@@ -1415,6 +1415,28 @@ export function panelHTML(env, options = {}) {
     }
 
     /* تب‌های اختصاصی درون پنل ادمین */
+    .sys-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+    .sys-card { background: rgba(255,255,255,0.03); border: 1px solid var(--border-subtle); border-radius: var(--radius-md); padding: 18px; }
+    [data-theme="light"] .sys-card { background: rgba(255,255,255,0.7); }
+    .sys-card-title { font-size: 0.92rem; font-weight: 800; color: var(--text-main); margin-bottom: 12px; display: flex; gap: 8px; align-items: center; }
+    .sys-dl { display: grid; gap: 8px; margin: 0; }
+    .sys-dl > div { display: flex; justify-content: space-between; gap: 12px; font-size: 0.84rem; border-bottom: 1px dashed var(--border-subtle); padding-bottom: 6px; }
+    .sys-dl dt { color: var(--text-muted); }
+    .sys-dl dd { margin: 0; color: var(--text-main); font-weight: 600; text-align: end; word-break: break-all; }
+    .sys-status { font-size: 0.88rem; line-height: 1.8; margin-bottom: 10px; color: var(--text-main); }
+    .sys-status.ok { color: var(--accent-green); }
+    .sys-status.new { color: var(--accent-amber); font-weight: 700; }
+    .sys-status.bad { color: var(--accent-rose); }
+    .sys-notes { margin: 0 0 12px; padding-inline-start: 18px; font-size: 0.82rem; line-height: 1.9; color: var(--text-muted); }
+    .sys-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .sys-help { font-size: 0.8rem; color: var(--text-muted); line-height: 1.8; margin-bottom: 8px; }
+    .sys-link { display: inline-flex; gap: 6px; align-items: center; font-size: 0.82rem; font-weight: 700; color: var(--accent-indigo); text-decoration: none; border: 1px solid var(--accent-indigo-border); border-radius: 10px; padding: 8px 12px; }
+    .sys-section-sep { border-top: 1px solid var(--border-subtle); margin: 16px 0 12px; }
+    .sys-log { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 6px; font-size: 0.84rem; }
+    .sys-log li { display: flex; gap: 8px; align-items: flex-start; }
+    .sys-log li.fail { color: var(--accent-rose); }
+    .sys-log li.done { color: var(--accent-green); }
+    .sys-log li.run { color: var(--accent-amber); }
     .admin-subtab-bar {
       display: flex;
       background: var(--table-bg);
@@ -2114,6 +2136,7 @@ export function panelHTML(env, options = {}) {
     #adminTabContentStats:not(.hidden),
     #adminTabContentCodes:not(.hidden),
     #adminTabContentUsers:not(.hidden),
+    #adminTabContentSystem:not(.hidden),
     #loginFormBox:not(.hidden),
     #registerFormBox:not(.hidden),
     #adminDashboardBox:not(.hidden) {
@@ -4129,6 +4152,9 @@ export function panelHTML(env, options = {}) {
           <button id="adminSubtabUsers" class="admin-subtab-btn" onclick="switchAdminSubtab('users')">
             <span>👥</span> <span data-i18n="adminTabUsers">مدیریت کاربران و ربات‌ها</span>
           </button>
+          <button id="adminSubtabSystem" class="admin-subtab-btn" onclick="switchAdminSubtab('system')">
+            <span>🔄</span> <span>سیستم و به‌روزرسانی</span> <span id="sysUpdateDot" class="hidden" style="width:8px;height:8px;border-radius:50%;background:var(--accent-rose);display:inline-block;margin-inline-start:2px;"></span>
+          </button>
         </div>
 
         <!-- 📊 تب ۱: آمار و کارت‌های شاخص -->
@@ -4159,6 +4185,68 @@ export function panelHTML(env, options = {}) {
             <div style="font-size:0.8rem; color:var(--text-muted); line-height: 1.6;">
               سرورهای Cloudflare Workers با توزیع جهانی در حال اجرای کرون‌جاب‌های زمان‌بندی‌شده هستند. اتصال همگام‌ساز تهران در میلی‌ثانیه صفر هر دقیقه فعال است.
             </div>
+          </div>
+        </div>
+
+        <!-- 🔄 تب ۴: مشخصات سیستم و به‌روزرسانی -->
+        <div id="adminTabContentSystem" class="hidden">
+          <div class="sys-grid">
+            <div class="sys-card">
+              <div class="sys-card-title">ℹ️ <span>مشخصات سامانه</span></div>
+              <dl class="sys-dl">
+                <div><dt>نسخهٔ فعلی</dt><dd id="sysVersion" class="mono">—</dd></div>
+                <div><dt>شمارهٔ ساخت</dt><dd id="sysBuild" class="mono">—</dd></div>
+                <div><dt>نام Worker</dt><dd id="sysWorker" class="mono">—</dd></div>
+                <div><dt>آدرس</dt><dd id="sysHost" class="mono">—</dd></div>
+                <div><dt>دیتاسنتر Cloudflare</dt><dd id="sysColo" class="mono">—</dd></div>
+                <div><dt>پایگاه‌داده (KV / D1)</dt><dd id="sysStorage">—</dd></div>
+                <div><dt>رانر ۲۴ ساعته</dt><dd id="sysRunner">—</dd></div>
+                <div><dt>تعداد کاربران</dt><dd id="sysUsers" class="mono">—</dd></div>
+              </dl>
+            </div>
+
+            <div class="sys-card">
+              <div class="sys-card-title">🆕 <span>به‌روزرسانی</span></div>
+              <div id="sysUpdateStatus" class="sys-status">برای دیدن آخرین نسخه، «بررسی به‌روزرسانی» را بزنید.</div>
+              <ul id="sysNotes" class="sys-notes hidden"></ul>
+              <div class="sys-actions">
+                <button class="btn btn-secondary" id="sysCheckBtn" onclick="checkSystemUpdate(true)"><span>🔍 بررسی به‌روزرسانی</span></button>
+              </div>
+            </div>
+          </div>
+
+          <div class="sys-card" id="sysApplyCard" style="margin-top:14px;">
+            <div class="sys-card-title">⬇️ <span>به‌روزرسانی خودکار</span></div>
+            <div class="sys-help">برای جایگزینی کد این Worker با آخرین نسخه، یک توکن Cloudflare لازم است (همان مجوزهای ویزارد). توکن فقط برای همین درخواست استفاده می‌شود و ذخیره نمی‌شود. دیتابیس‌ها، رمزها، کاربران و تنظیمات دست‌نخورده می‌مانند.</div>
+            <a class="sys-link" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=*&zoneId=all&name=Arizo%20Self%20Updater" target="_blank" rel="noopener"><span>🔑 ساخت توکن Cloudflare</span></a>
+            <div class="form-group" style="margin-top:10px;">
+              <label class="form-label" for="sysCfToken"><span>توکن Cloudflare</span></label>
+              <input type="password" id="sysCfToken" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="Cloudflare API Token">
+            </div>
+            <div class="form-group hidden" id="sysNameGroup">
+              <label class="form-label" for="sysWorkerName"><span>نام Worker</span></label>
+              <input type="text" id="sysWorkerName" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="my-worker">
+            </div>
+
+            <div class="sys-section-sep"></div>
+            <div class="sys-help">اگر رانر ۲۴ ساعته را روی GitHub دارید، می‌توانید فورک خودتان را هم با نسخهٔ اصلی هماهنگ و رانر را ری‌استارت کنید (اختیاری).</div>
+            <label style="display:flex;gap:8px;align-items:center;font-weight:500;margin:8px 0;"><input type="checkbox" id="sysSyncRunner"> <span>رانر گیت‌هاب هم به‌روزرسانی شود</span></label>
+            <div id="sysGhBox" class="hidden">
+              <a class="sys-link" href="https://github.com/settings/tokens/new?scopes=repo,workflow&description=Arizo%20Self%20Updater" target="_blank" rel="noopener"><span>🔑 ساخت توکن GitHub</span></a>
+              <div class="form-group" style="margin-top:10px;">
+                <label class="form-label" for="sysGhToken"><span>توکن GitHub</span></label>
+                <input type="password" id="sysGhToken" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="ghp_… / github_pat_…">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="sysGhRepo"><span>ریپوی رانر (اختیاری)</span></label>
+                <input type="text" id="sysGhRepo" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="username/Arizo_Self">
+              </div>
+            </div>
+
+            <div class="sys-actions" style="margin-top:12px;">
+              <button class="btn btn-primary" id="sysApplyBtn" onclick="applySystemUpdate()"><span>🚀 به‌روزرسانی همین حالا</span></button>
+            </div>
+            <ul id="sysLog" class="sys-log hidden"></ul>
           </div>
         </div>
 
@@ -6217,6 +6305,30 @@ export function panelHTML(env, options = {}) {
     // 🌐 دیکشنری الحاقی برای قابلیت‌های جدید (AI Smart Reply, Models, Ignore List, Ghost Mode, etc.)
     // =========================================================================
     var ADDITIONAL_TRANSLATIONS = {
+      // 🔄 System & Updates tab
+      "سیستم و به‌روزرسانی": "System & Updates",
+      "مشخصات سامانه": "System specs",
+      "نسخهٔ فعلی": "Current version",
+      "شمارهٔ ساخت": "Build number",
+      "نام Worker": "Worker name",
+      "آدرس": "Address",
+      "دیتاسنتر Cloudflare": "Cloudflare datacenter",
+      "پایگاه‌داده (KV / D1)": "Database (KV / D1)",
+      "رانر ۲۴ ساعته": "24/7 runner",
+      "تعداد کاربران": "Users",
+      "به‌روزرسانی": "Update",
+      "برای دیدن آخرین نسخه، «بررسی به‌روزرسانی» را بزنید.": "Press Check for updates to see the latest version.",
+      "🔍 بررسی به‌روزرسانی": "🔍 Check for updates",
+      "به‌روزرسانی خودکار": "Automatic update",
+      "برای جایگزینی کد این Worker با آخرین نسخه، یک توکن Cloudflare لازم است (همان مجوزهای ویزارد). توکن فقط برای همین درخواست استفاده می‌شود و ذخیره نمی‌شود. دیتابیس‌ها، رمزها، کاربران و تنظیمات دست‌نخورده می‌مانند.": "A Cloudflare token is required to replace this Worker's code with the latest version. The token is used only for this request and is never stored. Databases, secrets, users and settings stay untouched.",
+      "🔑 ساخت توکن Cloudflare": "🔑 Create Cloudflare token",
+      "توکن Cloudflare": "Cloudflare token",
+      "اگر رانر ۲۴ ساعته را روی GitHub دارید، می‌توانید فورک خودتان را هم با نسخهٔ اصلی هماهنگ و رانر را ری‌استارت کنید (اختیاری).": "If you run the 24/7 runner on GitHub you can also sync your fork with the main repository and restart the runner (optional).",
+      "رانر گیت‌هاب هم به‌روزرسانی شود": "Update the GitHub runner too",
+      "🔑 ساخت توکن GitHub": "🔑 Create GitHub token",
+      "توکن GitHub": "GitHub token",
+      "ریپوی رانر (اختیاری)": "Runner repository (optional)",
+      "🚀 به‌روزرسانی همین حالا": "🚀 Update now",
       // 🤖 AI Smart Reply — Section Header & Description
       'پاسخ هوشمند مبتنی بر هوش مصنوعی (AI Smart Reply)': 'Intelligent AI-Powered Smart Reply (AI Smart Reply)',
       'پاسخگویی هوشمند به پیام‌های پیوی با هوش مصنوعی (AI Smart Reply)': 'Intelligent Private Chat AI Auto-Reply (AI Smart Reply)',
@@ -7378,18 +7490,168 @@ export function panelHTML(env, options = {}) {
       var btnStats = document.getElementById('adminSubtabStats');
       var btnCodes = document.getElementById('adminSubtabCodes');
       var btnUsers = document.getElementById('adminSubtabUsers');
+      var btnSys = document.getElementById('adminSubtabSystem');
 
       var boxStats = document.getElementById('adminTabContentStats');
       var boxCodes = document.getElementById('adminTabContentCodes');
       var boxUsers = document.getElementById('adminTabContentUsers');
+      var boxSys = document.getElementById('adminTabContentSystem');
 
       btnStats.classList.toggle('active', tab === 'stats');
       btnCodes.classList.toggle('active', tab === 'codes');
       btnUsers.classList.toggle('active', tab === 'users');
+      if (btnSys) btnSys.classList.toggle('active', tab === 'system');
 
       boxStats.classList.toggle('hidden', tab !== 'stats');
       boxCodes.classList.toggle('hidden', tab !== 'codes');
       boxUsers.classList.toggle('hidden', tab !== 'users');
+      if (boxSys) boxSys.classList.toggle('hidden', tab !== 'system');
+      if (tab === 'system' && typeof window.loadSystemInfo === 'function') window.loadSystemInfo();
+      if (typeof window.translateDOM === 'function') window.translateDOM(document.getElementById('adminPanelSection') || document.body, window.currentLang);
+    };
+
+    // ==========================================
+    // 🔄 سیستم و به‌روزرسانی
+    // ==========================================
+    function sysEn() { return window.currentLang === 'en'; }
+    function sysMsg(d) { return (sysEn() ? d.en : d.fa) || d.en || d.fa || 'Error'; }
+    function sysText(id, v) { var el = document.getElementById(id); if (el) el.textContent = v; }
+    function sysDate(ms) {
+      if (!ms) return '—';
+      try { return new Date(ms).toLocaleString(sysEn() ? 'en-GB' : 'fa-IR'); } catch (_) { return String(ms); }
+    }
+    window.sysLatest = null;
+    window.sysInfo = null;
+
+    window.loadSystemInfo = async function() {
+      try {
+        var r = await fetch('/api/admin/system', { headers: adminHeaders(), cache: 'no-store' });
+        var d = await r.json();
+        if (!d.ok) return;
+        window.sysInfo = d;
+        var en = sysEn();
+        sysText('sysVersion', 'v' + d.app.version + ' ' + d.app.channel);
+        sysText('sysBuild', String(d.app.build));
+        sysText('sysWorker', d.worker.name || (en ? 'custom domain' : 'دامنهٔ دلخواه'));
+        sysText('sysHost', d.worker.host);
+        sysText('sysColo', (d.worker.colo || '—') + (d.worker.country ? ' · ' + d.worker.country : ''));
+        sysText('sysStorage', 'KV ' + (d.storage.kv ? '✅' : '❌') + '  ·  D1 ' + (d.storage.d1 ? '✅' : '❌'));
+        sysText('sysRunner', d.runner.alive ? ('🟢 ' + (en ? 'Active' : 'فعال')) : ('🔴 ' + (en ? 'Not connected' : 'متصل نیست')));
+        sysText('sysUsers', String(d.users));
+        var nameGroup = document.getElementById('sysNameGroup');
+        if (nameGroup) nameGroup.classList.toggle('hidden', !!d.worker.name);
+        if (!window.sysLatest) window.checkSystemUpdate(false);
+      } catch (_) {}
+    };
+
+    window.checkSystemUpdate = async function(fresh) {
+      var st = document.getElementById('sysUpdateStatus');
+      var btn = document.getElementById('sysCheckBtn');
+      var notesEl = document.getElementById('sysNotes');
+      var en = sysEn();
+      if (fresh && btn) btn.disabled = true;
+      if (st) { st.className = 'sys-status'; st.textContent = en ? 'Checking…' : 'در حال بررسی…'; }
+      try {
+        var r = await fetch('/api/admin/update/check' + (fresh ? '?fresh=1' : ''), { headers: adminHeaders(), cache: 'no-store' });
+        var d = await r.json();
+        if (!d.ok) {
+          if (st) { st.className = 'sys-status bad'; st.textContent = '❌ ' + sysMsg(d); }
+          return;
+        }
+        window.sysLatest = d;
+        var dot = document.getElementById('sysUpdateDot');
+        if (dot) dot.classList.toggle('hidden', !d.updateAvailable);
+        if (st) {
+          if (d.updateAvailable) {
+            st.className = 'sys-status new';
+            st.textContent = (en ? '🆕 A new version is available: v' : '🆕 نسخهٔ جدید موجود است: v') + d.latest.version + ' ' + d.latest.channel + '  (build ' + d.latest.build + ')  —  ' + (en ? 'published ' : 'انتشار: ') + sysDate(d.latest.publishedAt);
+          } else {
+            st.className = 'sys-status ok';
+            st.textContent = (en ? '✅ You are on the latest version (v' : '✅ شما آخرین نسخه را دارید (v') + d.current.version + ' ' + d.current.channel + ').  ' + (en ? 'Checked ' : 'آخرین بررسی: ') + sysDate(d.checkedAt);
+          }
+        }
+        if (notesEl) {
+          var list = (d.latest.notes && (en ? d.latest.notes.en : d.latest.notes.fa)) || [];
+          notesEl.innerHTML = '';
+          list.forEach(function(t) { var li = document.createElement('li'); li.textContent = t; notesEl.appendChild(li); });
+          notesEl.classList.toggle('hidden', !list.length || !d.updateAvailable);
+        }
+      } catch (_) {
+        if (st) { st.className = 'sys-status bad'; st.textContent = '❌ ' + (en ? 'Could not reach the server.' : 'ارتباط با سرور برقرار نشد.'); }
+      } finally {
+        if (btn) btn.disabled = false;
+      }
+    };
+
+    (function() {
+      document.addEventListener('change', function(e) {
+        if (e.target && e.target.id === 'sysSyncRunner') {
+          var box = document.getElementById('sysGhBox');
+          if (box) box.classList.toggle('hidden', !e.target.checked);
+        }
+      });
+    })();
+
+    window.applySystemUpdate = async function() {
+      var en = sysEn();
+      var cf = (document.getElementById('sysCfToken').value || '').trim();
+      var wantRunner = !!document.getElementById('sysSyncRunner').checked;
+      var gh = (document.getElementById('sysGhToken').value || '').trim();
+      var repo = (document.getElementById('sysGhRepo').value || '').trim();
+      var nameInput = (document.getElementById('sysWorkerName').value || '').trim().toLowerCase();
+      var log = document.getElementById('sysLog');
+      var btn = document.getElementById('sysApplyBtn');
+      var logs = [];
+      function render() {
+        log.innerHTML = '';
+        logs.forEach(function(x) {
+          var li = document.createElement('li');
+          li.className = x.s;
+          li.textContent = (x.s === 'done' ? '✅ ' : x.s === 'fail' ? '❌ ' : x.s === 'run' ? '⏳ ' : '• ') + x.t;
+          log.appendChild(li);
+        });
+        log.classList.remove('hidden');
+      }
+      if (!cf) { showToast(en ? 'Enter the Cloudflare token first.' : 'ابتدا توکن Cloudflare را وارد کنید.', 'error'); return; }
+      if (wantRunner && !gh) { showToast(en ? 'Enter the GitHub token or untick the runner option.' : 'توکن GitHub را وارد کنید یا گزینهٔ رانر را بردارید.', 'error'); return; }
+      var force = !!(window.sysLatest && !window.sysLatest.updateAvailable);
+      if (force && !confirm(en ? 'You already have the latest version. Reinstall it anyway?' : 'شما آخرین نسخه را دارید. باز هم دوباره نصب شود؟')) return;
+
+      btn.disabled = true;
+      logs.push({ s: 'run', t: en ? 'Downloading and verifying the latest release, then replacing the code…' : 'دانلود و راستی‌آزمایی آخرین نسخه و جایگزینی کد…' });
+      render();
+      try {
+        var r = await fetch('/api/admin/update/apply', {
+          method: 'POST', headers: adminHeaders(),
+          body: JSON.stringify({ cfToken: cf, workerName: nameInput || undefined, force: force })
+        });
+        var d = await r.json();
+        if (!d.ok) {
+          logs[0] = { s: 'fail', t: sysMsg(d) };
+          if (d.code === 'need_worker_name') document.getElementById('sysNameGroup').classList.remove('hidden');
+          render(); return;
+        }
+        logs[0] = { s: 'done', t: (en ? 'Panel code updated to v' : 'کد پنل به‌روزرسانی شد: v') + d.latest.version };
+        if (wantRunner) {
+          logs.push({ s: 'run', t: en ? 'Syncing the GitHub runner…' : 'هماهنگ‌سازی رانر گیت‌هاب…' });
+          render();
+          var r2 = await fetch('/api/admin/update/runner', { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ ghToken: gh, repo: repo || undefined }) });
+          var d2 = await r2.json();
+          logs[1] = d2.ok
+            ? { s: 'done', t: (en ? 'Runner repository synced and restarted: ' : 'ریپوی رانر هماهنگ و ری‌استارت شد: ') + d2.repo }
+            : { s: 'fail', t: sysMsg(d2) };
+        }
+        logs.push({ s: 'done', t: en ? 'Done. The page will reload in a few seconds to load the new version.' : 'تمام شد. صفحه تا چند ثانیه دیگر برای بارگذاری نسخهٔ جدید دوباره باز می‌شود.' });
+        render();
+        document.getElementById('sysCfToken').value = '';
+        document.getElementById('sysGhToken').value = '';
+        setTimeout(function() { window.location.reload(); }, 6000);
+      } catch (_) {
+        logs[0] = { s: 'fail', t: en ? 'Could not reach the server.' : 'ارتباط با سرور برقرار نشد.' };
+        render();
+      } finally {
+        btn.disabled = false;
+      }
     };
 
     window.logoutAdmin = function() {
