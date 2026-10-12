@@ -518,14 +518,62 @@ describe('Setup Wizard — step 3 wording on an already deployed Worker', () => 
   });
 
   it('should render the full install wizard when the worker is already configured', async () => {
-    const res = await worker.fetch(new Request('https://arizo.test/setup'), createEnv());
+    const res = await worker.fetch(new Request('https://arizo-self.arizosupport.workers.dev/setup'), createEnv());
     const html = await res.text();
     assert(html.includes('connect:false'));
   });
 
   it('should send different cache validators for the two modes so a stale page is never reused', async () => {
     const raw = await worker.fetch(new Request('https://raw.workers.dev/setup'), {});
-    const full = await worker.fetch(new Request('https://arizo.test/setup'), createEnv());
+    const full = await worker.fetch(new Request('https://arizo-self.arizosupport.workers.dev/setup'), createEnv());
     assert(raw.headers.get('ETag') !== full.headers.get('ETag'));
+  });
+});
+
+describe('Setup Wizard — user-deployed workers use connect mode (no "install", no name field)', () => {
+  const req = (host, path = '/setup', init) => new Request('https://' + host + path, init);
+
+  it('should show connect mode on a user worker even if its storage is already bound', async () => {
+    const res = await worker.fetch(req('arizo.jt2psiuo60xrbjfcu802q25ehl1.workers.dev'), createEnv());
+    const html = await res.text();
+    assert(html.includes('connect:true'));
+    assertEqual(res.headers.get('ETag'), '"arizo-wiz-v4.2-connect"');
+  });
+
+  it('should keep the full install wizard only on the official wizard host', async () => {
+    const res = await worker.fetch(req('arizo-self.arizosupport.workers.dev'), createEnv());
+    assert((await res.text()).includes('connect:false'));
+  });
+
+  it('should tell the wizard client to use connect mode via the status endpoint', async () => {
+    const post = host => worker.fetch(req(host, '/api/setup/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.61' }, body: '{}' }), createEnv());
+    assertEqual((await (await post('mine.example.workers.dev')).json()).connect, true);
+    assertEqual((await (await post('arizo-self.arizosupport.workers.dev')).json()).connect, false);
+  });
+
+  it('should reuse the KV and D1 already bound to the worker instead of creating new ones', async () => {
+    const net = mockNetwork();
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init = {}) => {
+      const u = typeof input === 'string' ? input : input.url;
+      if (u.endsWith('/workers/scripts/arizo-self/settings') && (init.method || 'GET') === 'GET') {
+        return new Response(JSON.stringify({ success: true, result: { bindings: [{ type: 'kv_namespace', name: 'KV', namespace_id: 'kvBound' }, { type: 'd1', name: 'DB', id: 'd1Bound' }] } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return real(input, init);
+    };
+    try {
+      const r = await handleWizardApi('cloudflare/locate', { token: CF_TOKEN, workerName: 'arizo-self' });
+      assertEqual(r.data.kvId, 'kvBound');
+      assertEqual(r.data.d1Id, 'd1Bound');
+    } finally { globalThis.fetch = real; net.restore(); }
+  });
+
+  it('should return only the account when the worker has no storage bound yet', async () => {
+    const net = mockNetwork();
+    try {
+      const r = await handleWizardApi('cloudflare/locate', { token: CF_TOKEN, workerName: 'arizo-self' });
+      assertEqual(r.data.accountId, 'acc1');
+      assertEqual(r.data.kvId, undefined);
+    } finally { net.restore(); }
   });
 });
