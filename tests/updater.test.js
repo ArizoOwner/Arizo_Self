@@ -397,3 +397,27 @@ describe('Updater — stored tokens & automatic updates', () => {
     }
   });
 });
+
+describe('Updater — no reinstall loop', () => {
+  it('should not auto-install the same build twice even if the running build never catches up', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.96');
+    resetReleaseCache();
+    const net = mockNetwork();
+    try {
+      await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: JSON.stringify({ cfToken: CF_TOKEN }) }), env);
+      await worker.fetch(adminReq('/api/admin/update/auto', token, { method: 'POST', body: JSON.stringify({ enabled: true }) }), env);
+      for (let i = 0; i < 2; i++) {
+        globalThis.__updNext = 0;
+        const st = JSON.parse(await env.KV.get('updater:state'));
+        st.lastCheck = 0;
+        await env.KV.put('updater:state', JSON.stringify(st));
+        resetReleaseCache();
+        const pending = [];
+        await worker.scheduled({}, env, { waitUntil: p => pending.push(p) });
+        await Promise.all(pending);
+      }
+      assertEqual(net.calls.filter(c => c.method === 'PUT' && c.u.endsWith('/content')).length, 1);
+    } finally { net.restore(); resetReleaseCache(); }
+  });
+});
