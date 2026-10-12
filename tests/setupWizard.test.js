@@ -330,3 +330,108 @@ describe('Setup Wizard — API surface', () => {
     assertEqual(plain.join(','), 'API_HASH,API_ID');
   });
 });
+
+describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
+  const rawEnv = () => ({});
+
+  it('should redirect the panel and admin routes to /setup when the worker has no bindings', async () => {
+    for (const path of ['/', '/admin']) {
+      const res = await worker.fetch(new Request('https://raw.workers.dev' + path), rawEnv());
+      assertEqual(res.status, 302);
+      assertEqual(res.headers.get('Location'), '/setup');
+    }
+  });
+
+  it('should serve the wizard and report configured=false without any storage', async () => {
+    const page = await worker.fetch(new Request('https://raw.workers.dev/setup'), rawEnv());
+    assertEqual(page.status, 200);
+    const st = await worker.fetch(new Request('https://raw.workers.dev/api/setup/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.7' }, body: '{}' }), rawEnv());
+    const data = await st.json();
+    assertEqual(data.configured, false);
+  });
+
+  it('should answer other API routes with 503 setup_required instead of crashing', async () => {
+    const res = await worker.fetch(new Request('https://raw.workers.dev/api/admin/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"password":"x"}' }), rawEnv());
+    assertEqual(res.status, 503);
+    assertEqual((await res.json()).error, 'setup_required');
+  });
+
+  it('should report configured=true once ADMIN_PASSWORD and storage exist', async () => {
+    const env = createEnv();
+    const st = await worker.fetch(new Request('https://arizo.test/api/setup/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.8' }, body: '{}' }), env);
+    assertEqual((await st.json()).configured, true);
+    const root = await worker.fetch(new Request('https://arizo.test/'), env);
+    assertEqual(root.status, 200);
+  });
+
+  it('should skip the cron work on an unconfigured worker', async () => {
+    await worker.scheduled({}, rawEnv(), { waitUntil() {} });
+  });
+
+  it('should locate the account that owns the running worker', async () => {
+    const net = mockNetwork();
+    try {
+      const r = await handleWizardApi('cloudflare/locate', { token: CF_TOKEN, workerName: 'arizo-self' });
+      assertEqual(r.status, 200);
+      assertEqual(r.data.accountId, 'acc1');
+      const missing = await handleWizardApi('cloudflare/locate', { token: CF_TOKEN, workerName: 'not-here' });
+      assertEqual(missing.data.code, 'worker_not_found');
+      assertEqual(missing.status, 404);
+    } finally { net.restore(); }
+  });
+
+  it('should name KV and D1 per worker so installs never collide', async () => {
+    const net = mockNetwork();
+    try {
+      await handleWizardApi('cloudflare/resources', { token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel' });
+      const kvCreate = net.calls.find(c => c.method === 'POST' && c.u.endsWith('/storage/kv/namespaces'));
+      assertEqual(JSON.parse(kvCreate.body).title, 'my-panel-kv');
+      const d1Create = net.calls.find(c => c.method === 'POST' && c.u.endsWith('/d1/database'));
+      assertEqual(JSON.parse(d1Create.body).name, 'my_panel_db');
+    } finally { net.restore(); }
+  });
+
+  it('should attach bindings with PATCH settings and keep unrelated existing bindings', async () => {
+    const net = mockNetwork();
+    const real = globalThis.fetch;
+    globalThis.fetch = async (input, init = {}) => {
+      const u = typeof input === 'string' ? input : input.url;
+      if (u.endsWith('/workers/scripts/arizo-self/settings') && (init.method || 'GET') === 'GET') {
+        return new Response(JSON.stringify({ success: true, result: { bindings: [{ type: 'plain_text', name: 'CUSTOM', text: 'v' }, { type: 'secret_text', name: 'ADMIN_PASSWORD' }], compatibility_date: '2024-09-23', compatibility_flags: [] } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      if (u.endsWith('/workers/scripts/arizo-self/settings') && init.method === 'PATCH') {
+        net.calls.push({ u, method: 'PATCH', body: init.body });
+        return new Response(JSON.stringify({ success: true, result: {} }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      }
+      return real(input, init);
+    };
+    try {
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'kvNew', d1Id: 'd1New', adminPassword: 'A'.repeat(24), runnerSecret: 'B'.repeat(48) });
+      assertEqual(r.status, 200);
+      const patch = net.calls.find(c => c.method === 'PATCH');
+      assert(patch && patch.body instanceof FormData);
+      const settings = JSON.parse(await patch.body.get('settings').text());
+      const byName = Object.fromEntries(settings.bindings.map(b => [b.name, b]));
+      assertEqual(byName.CUSTOM.type, 'inherit');
+      assertEqual(byName.ADMIN_PASSWORD.type, 'secret_text');
+      assertEqual(byName.RUNNER_SECRET.type, 'secret_text');
+      assertEqual(byName.KV.type, 'kv_namespace');
+      assertEqual(byName.DB.type, 'd1');
+      assert(settings.compatibility_flags.includes('nodejs_compat'));
+    } finally { globalThis.fetch = real; net.restore(); }
+  });
+
+  it('should refuse weak secrets when attaching', async () => {
+    const net = mockNetwork();
+    try {
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'k', d1Id: 'd', adminPassword: 'x', runnerSecret: 'y' });
+      assertEqual(r.data.code, 'weak_secret');
+    } finally { net.restore(); }
+  });
+
+  it('should serve a wizard whose client contains connect-mode steps', async () => {
+    const res = await worker.fetch(new Request('https://raw.workers.dev/setup'), rawEnv());
+    const html = await res.text();
+    assert(html.includes('cloudflare/') && html.includes("api('status'") && html.includes('connectBanner'));
+  });
+});
