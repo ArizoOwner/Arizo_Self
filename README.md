@@ -11,7 +11,7 @@
 
 <br>
 
-<a href="https://github.com/ArizoOwner/arizo-telegram-self-manager/actions"><img src="https://img.shields.io/badge/⚡_Engine_Status-24%2F7_Active-22c55e?style=for-the-badge&labelColor=0d1117" alt="Engine Status"/></a>
+<a href="https://github.com/ArizoOwner/Arizo_Self/actions"><img src="https://img.shields.io/badge/⚡_Engine_Status-24%2F7_Active-22c55e?style=for-the-badge&labelColor=0d1117" alt="Engine Status"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Response_Time-<%2040ms-a855f7?style=for-the-badge&labelColor=0d1117" alt="Response Time"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Security-2FA_TOTP_+_Honeypot-ec4899?style=for-the-badge&labelColor=0d1117" alt="Security"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Uptime-99.9%25-0ea5e9?style=for-the-badge&labelColor=0d1117" alt="Uptime"/></a>
@@ -35,10 +35,6 @@
   <img src="./assets/preview.png" alt="Arizo Web Studio Preview" width="95%" />
 </p>
 
-<p align="center"><img src="./assets/demo.svg" alt="A live Telegram profile clock and the helper bot logging deleted, edited and view-once messages" width="100%"/></p>
-
-<p align="center"><img src="./assets/marquee.svg" alt="Feature ticker" width="100%"/></p>
-
 <br>
 
 <a href="https://workers.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare_Workers-Edge_Serverless-f38020?style=flat-square&logo=cloudflare&logoColor=white" alt="Cloudflare"/></a>
@@ -56,7 +52,7 @@
 
 </div>
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
@@ -283,15 +279,13 @@
 </tr>
 </table>
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
 ### 「 ✦ جدول دستورات درون‌برنامه‌ای تلگرام (Telegram Commands Cheatsheet) ✦ 」
 
 </div>
-
-<p align="center"><img src="./assets/terminal.svg" alt="Typing .ghost on, .read all and .mute in Telegram and watching the account state change" width="100%"/></p>
 
 > این دستورات مستقیماً در گفتگوهای تلگرام و بدون نیاز به ورود به پنل وب قابل استفاده هستند:
 
@@ -308,7 +302,7 @@
 | `/test` | در ربات دستیار شخصی | ارسال پیام آزمایشی جهت اعتبارسنجی ارسال گزارش و رسانه |
 | `/status` | در ربات دستیار شخصی | استعلام زنده وضعیت اتصال سلف‌بات، حافظه و سلامت سیستم |
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
@@ -316,56 +310,48 @@
 
 </div>
 
-<p align="center"><img src="./assets/flow.svg" alt="Cloudflare edge to engine to Telegram data flow" width="100%"/></p>
-
 ```mermaid
-%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 50, "padding": 10, "htmlLabels": true}}}%%
-flowchart LR
-    subgraph EDGE["🌐 لبه ابری Cloudflare"]
-        direction TB
-        HONEY["🍯 Honeypot<br/><small>Auto-Ban + Alert</small>"]
-        CF["☁️ Workers<br/><small>API · Studio · Mini App</small>"]
-        KV[("🗄️ KV<br/><small>AES-256-GCM</small>")]
-        HONEY --> CF
-        CF <-->|"2FA"| KV
+graph TD
+    subgraph "🌐 لایه پردازش ابری (Cloudflare Edge)"
+        CF["☁️ Cloudflare Workers<br/><small>REST API · Web Studio · Mini App · Webhook</small>"]
+        KV[("🗄️ Cloudflare KV<br/><small>AES-256-GCM Isolated User Vault</small>")]
+        HONEY["🍯 Zero-Trust Honeypot<br/><small>Threat Detection & Auto-Ban</small>"]
     end
 
-    subgraph ENGINE["⚡ موتور و سوکت‌ها"]
-        direction TB
-        RUNNER["🔄 Runner<br/><small>24/7</small>"]
-        SOCKET["🔌 Socket Pool<br/><small>under 40ms</small>"]
-        CACHE["🧠 Cache<br/><small>Anti-Delete</small>"]
-        RUNNER --> SOCKET --> CACHE
+    subgraph "⚡ لایه موتور و سوکت‌ها (Zero-Downtime Engine)"
+        RUNNER["🔄 Persistent Runner (GitHub Actions / VPS)<br/><small>Zero-Downtime 24/7 Engine</small>"]
+        SOCKET["🔌 Warm Socket Pool<br/><small>Sub-40ms MTProto Gateway</small>"]
+        CACHE["🧠 Smart Memory Cache<br/><small>Anti-Delete · Anti-Edit Buffer</small>"]
     end
 
-    subgraph TG["📱 اکوسیستم تلگرام"]
-        direction TB
-        DC["☁️ MTProto DC"]
-        USER["👤 حساب کاربری"]
-        BOT["🤖 ربات دستیار"]
-        DC --> USER
+    subgraph "📱 اکوسیستم تلگرام (Telegram Ecosystem)"
+        DC["☁️ Telegram Datacenter<br/><small>Official MTProto 2.0</small>"]
+        BOT["🤖 دستیار شخصی تلگرام<br/><small>Helper Bot · Logger · Mini App</small>"]
+        USER["👤 حساب کاربری تلگرام<br/><small>Atomic Clock · Bio · Ghost Mode · AFK</small>"]
     end
 
-    EDGE ---|"Sync 10s"| ENGINE
-    ENGINE ---|"اتصال TCP"| TG
+    CF <-->|"HTTPS + 2FA Auth"| KV
+    HONEY -->|"Auto-Block IP"| CF
+    HONEY -->|"Instant Alert"| BOT
+    RUNNER -->|"10s Sync Config"| CF
+    RUNNER --> SOCKET
+    SOCKET --> CACHE
+    SOCKET <-->|"Sub-40ms TCP Stream"| DC
+    DC --> USER
+    SOCKET -->|"Direct Delivery (Anti-Delete/TTL)"| BOT
 
-    classDef cf fill:#f38020,stroke:#f38020,color:#fff
-    classDef vault fill:#6366f1,stroke:#6366f1,color:#fff
-    classDef risk fill:#ef4444,stroke:#ef4444,color:#fff
-    classDef run fill:#22c55e,stroke:#22c55e,color:#fff
-    classDef sock fill:#a855f7,stroke:#a855f7,color:#fff
-    classDef mem fill:#ec4899,stroke:#ec4899,color:#fff
-    classDef tg fill:#0088cc,stroke:#0088cc,color:#fff
-    class CF cf
-    class KV vault
-    class HONEY risk
-    class RUNNER run
-    class SOCKET sock
-    class CACHE mem
-    class DC,BOT,USER tg
+    style CF fill:#f38020,stroke:#f38020,color:#fff
+    style KV fill:#6366f1,stroke:#6366f1,color:#fff
+    style HONEY fill:#ef4444,stroke:#ef4444,color:#fff
+    style RUNNER fill:#22c55e,stroke:#22c55e,color:#fff
+    style SOCKET fill:#a855f7,stroke:#a855f7,color:#fff
+    style CACHE fill:#ec4899,stroke:#ec4899,color:#fff
+    style DC fill:#26A5E4,stroke:#26A5E4,color:#fff
+    style BOT fill:#0088cc,stroke:#0088cc,color:#fff
+    style USER fill:#0ea5e9,stroke:#0ea5e9,color:#fff
 ```
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
@@ -383,15 +369,13 @@ flowchart LR
 </tr>
 </table>
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
 ### 「 ✦ امنیت، حریم خصوصی و استانداردهای نظامی ✦ 」
 
 </div>
-
-<p align="center"><img src="./assets/security.svg" alt="Rotating 2FA code and honeypot banning a scanner at the edge" width="100%"/></p>
 
 <table>
 <tr>
@@ -418,7 +402,7 @@ flowchart LR
 </tr>
 </table>
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
@@ -441,8 +425,8 @@ flowchart LR
 
 1. مخزن را فورک یا کلون نمایید:
    ```bash
-   git clone https://github.com/ArizoOwner/arizo-telegram-self-manager.git
-   cd arizo-telegram-self-manager
+   git clone https://github.com/ArizoOwner/Arizo_Self.git
+   cd Arizo_Self
    ```
 
 2. ورکر را در کلودفلر مستقر کنید:
@@ -479,7 +463,7 @@ pm2 start scripts/github-runner.js --name arizo-self-engine
 pm2 save && pm2 startup
 ```
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <div align="center">
 
@@ -503,7 +487,7 @@ pm2 save && pm2 startup
 
 <br>
 
-<p align="center"><img src="./assets/divider.svg" alt="" width="100%"/></p>
+---
 
 <br>
 
