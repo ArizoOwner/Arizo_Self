@@ -249,6 +249,9 @@ function getUnifiedStorage(env) {
   return storage;
 }
 
+// فقط سایت رسمی نصب‌کننده، Workerِ تازه می‌سازد؛ هر Worker دیگری که کاربر خودش دیپلوی کرده فقط «راه‌اندازی» می‌شود
+const OFFICIAL_WIZARD_HOSTS = new Set(['arizo-self.arizosupport.workers.dev']);
+
 function isSetupRequired(env) {
   return !env || (!env.KV && !env.DB);
 }
@@ -493,6 +496,7 @@ export default {
   async fetch(request, env) {
     try {
       const needsSetup = isSetupRequired(env);
+      const wizardConnect = needsSetup || !OFFICIAL_WIZARD_HOSTS.has(new URL(request.url).hostname);
       initEnvStorage(env);
       const url = new URL(request.url);
       if (request.method === 'OPTIONS') {
@@ -620,7 +624,7 @@ export default {
 
     // 🚀 ویزارد تعاملی و گرافیکی ستاپ و راه‌اندازی شخصی (Self-Hosting Setup Wizard)
     if (url.pathname === '/setup' || url.pathname === '/wizard') {
-      const etag = needsSetup ? '"arizo-wiz-v4.1-connect"' : '"arizo-wiz-v4.1-auto"';
+      const etag = wizardConnect ? '"arizo-wiz-v4.2-connect"' : '"arizo-wiz-v4.2-auto"';
       if (etagMatches(request.headers.get('if-none-match'), etag)) {
         return new Response(null, {
           status: 304,
@@ -631,9 +635,9 @@ export default {
           }
         });
       }
-      const wizKey = needsSetup ? 'connect' : 'fresh';
+      const wizKey = wizardConnect ? 'connect' : 'fresh';
       if (!cachedWizardHtml[wizKey]) {
-        cachedWizardHtml[wizKey] = setupWizardHTML(env, url, { connect: needsSetup });
+        cachedWizardHtml[wizKey] = setupWizardHTML(env, url, { connect: wizardConnect });
       }
       return new Response(cachedWizardHtml[wizKey], {
         headers: {
@@ -656,7 +660,7 @@ export default {
       const body = await request.json().catch(() => ({}));
       const step = url.pathname.slice('/api/setup/'.length);
       if (step === 'status') {
-        return json({ ok: true, configured: !needsSetup }, 200, { 'Cache-Control': 'no-store' });
+        return json({ ok: true, configured: !needsSetup, connect: wizardConnect }, 200, { 'Cache-Control': 'no-store' });
       }
       const out = await handleWizardApi(step, body);
       return json(out.data, out.status, { 'Cache-Control': 'no-store' });
