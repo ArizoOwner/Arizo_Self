@@ -19,7 +19,9 @@ import { logSecurityEvent, getRecentSecurityEvents, AUDIT_EVENT_TYPES, AUDIT_SEV
 import { generateTotpSecret, generateTotpCode, verifyTotpToken, generateBackupCodes, getTotpAuthUri } from './security/totp.js';
 import { BackupManager } from './modules/backupManager.js';
 import { sanitizeWatchAlerts } from './modules/watchAlerts.js';
-import { handleWizardApi } from './modules/wizardDeploy.js';
+import { handleWizardApi, WizardError } from './modules/wizardDeploy.js';
+import { APP_NAME, APP_VERSION, APP_CHANNEL, APP_BUILD } from './version.js';
+import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName } from './modules/updater.js';
 import QRCode from 'qrcode';
 
 // هدرهای امنیتی درجه سازمانی (Enterprise Security & CSP)
@@ -669,6 +671,71 @@ export default {
     // ==========================================
     // 👑 بخش پنل مدیریت ادمین (Admin Management)
     // ==========================================
+
+    // ==========================================
+    // 🔄 سیستم و به‌روزرسانی (فقط مدیر)
+    // ==========================================
+    if (url.pathname === '/api/admin/system' && request.method === 'GET') {
+      if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
+      const usersList = await env.KV.get('users_list', 'json') || [];
+      let runnerPing = 0;
+      if (env.DB) {
+        try {
+          const row = await env.DB.prepare("SELECT value FROM kv_store WHERE key = 'runner:last_ping'").first();
+          if (row) runnerPing = Number(row.value) || 0;
+        } catch (_) {}
+      }
+      const cf = request.cf || {};
+      return json({
+        ok: true,
+        app: { name: APP_NAME, version: APP_VERSION, channel: APP_CHANNEL, build: APP_BUILD },
+        worker: { name: guessWorkerName(url.hostname), host: url.hostname, colo: cf.colo || '', country: cf.country || '' },
+        storage: { kv: !!env.KV_RAW || !!env.KV, d1: !!env.DB },
+        runner: { lastPing: runnerPing, alive: runnerPing > 0 && Date.now() - runnerPing < 300000, secret: !!env.RUNNER_SECRET },
+        users: usersList.length,
+        serverTime: Date.now()
+      }, 200, { 'Cache-Control': 'no-store' });
+    }
+
+    if (url.pathname === '/api/admin/update/check' && request.method === 'GET') {
+      if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
+      try {
+        const info = await checkForUpdate({ fresh: url.searchParams.get('fresh') === '1' });
+        return json({ ok: true, ...info }, 200, { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        if (err instanceof WizardError) return json({ ok: false, code: err.code, fa: err.fa, en: err.en }, err.status, { 'Cache-Control': 'no-store' });
+        return json({ ok: false, code: 'internal', fa: 'خطا در بررسی نسخه', en: 'Version check failed' }, 500);
+      }
+    }
+
+    if ((url.pathname === '/api/admin/update/apply' || url.pathname === '/api/admin/update/runner') && request.method === 'POST') {
+      if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
+      const rl = await checkRateLimit(env, `rl:upd:${clientIP}`, 12, 600);
+      if (!rl.allowed) return json({ ok: false, code: 'rate_limited', fa: 'درخواست‌های بیش از حد؛ چند دقیقه دیگر تلاش کنید.', en: 'Too many requests; try again in a few minutes.' }, 429);
+      const body = await request.json().catch(() => ({}));
+      try {
+        if (url.pathname.endsWith('/apply')) {
+          const name = String(body.workerName || guessWorkerName(url.hostname) || '').toLowerCase();
+          if (!name) {
+            return json({ ok: false, code: 'need_worker_name', fa: 'نام Worker از آدرس سایت مشخص نیست؛ آن را وارد کنید.', en: 'The Worker name cannot be read from the address; please enter it.' }, 400, { 'Cache-Control': 'no-store' });
+          }
+          const out = await applyCodeUpdate({ cfToken: body.cfToken, workerName: name, force: body.force === true });
+          await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, {
+            ip: clientIP, user: 'admin',
+            details: { action: 'panel_update', from: APP_BUILD, to: out.latest.build, version: out.latest.version }
+          }, AUDIT_SEVERITY.WARNING);
+          return json({ ok: true, latest: out.latest, workerName: name }, 200, { 'Cache-Control': 'no-store' });
+        }
+        const out = await ghSyncRunner(body.ghToken, body.repo);
+        await logSecurityEvent(env, AUDIT_EVENT_TYPES.CONFIG_MUTATED, {
+          ip: clientIP, user: 'admin', details: { action: 'runner_update', repo: out.repo, merge: out.mergeType }
+        }, AUDIT_SEVERITY.INFO);
+        return json({ ok: true, ...out }, 200, { 'Cache-Control': 'no-store' });
+      } catch (err) {
+        if (err instanceof WizardError) return json({ ok: false, code: err.code, fa: err.fa, en: err.en, ...err.extra }, err.status, { 'Cache-Control': 'no-store' });
+        return json({ ok: false, code: 'internal', fa: 'خطای داخلی در به‌روزرسانی', en: 'Internal update error' }, 500);
+      }
+    }
 
     // دریافت آمار سیستم برای ادمین
     if (url.pathname === '/api/admin/stats' && request.method === 'GET') {
