@@ -456,7 +456,7 @@ graph TD
    - generate a dedicated runner secret in your browser and store it as a Secret (there is no admin password);
    - set the per-minute cron, the workers.dev domain and the database tables;
    - fork the project, store the runner secrets with encryption and start the runner.
-6. At the end click **"Create the owner account"** and register on the site. **The first user to register becomes the owner**: lifetime plan, no license code needed, and the **"Admin panel"** button appears in the same site. Register yourself right away.
+6. At the end click **"Create the owner account"** and register on the site. The button fills in a **one-time setup code** automatically, and **only that code can create the first account**, so nobody else can become the owner before you. The first account is the **owner**: lifetime plan, no license code, and the **"Admin panel"** button appears in the same site. Do not share the code (it has no effect once the first account exists).
 
 > [!NOTE]
 > Tokens are used only on that page and are never stored. Every step is repeatable; on error just press "Retry". Once set up, `/` serves the panel.
