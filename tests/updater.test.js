@@ -290,6 +290,7 @@ describe('Updater — admin API', () => {
 describe('Updater — panel UI', () => {
   it('should ship the System & Updates tab in the admin panel', async () => {
     const env = createEnv();
+    await env.KV.put('users_list', JSON.stringify(['boss']));
     const res = await worker.fetch(new Request('https://mypanel.acme.workers.dev/admin'), env);
     const html = await res.text();
     assert(html.includes('adminSubtabSystem') && html.includes('adminTabContentSystem'));
