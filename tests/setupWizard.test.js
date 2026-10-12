@@ -359,6 +359,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
 
   it('should report configured=true once storage exists', async () => {
     const env = createEnv();
+    await env.KV.put('users_list', JSON.stringify(['boss']));
     const st = await worker.fetch(new Request('https://arizo.test/api/setup/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.8' }, body: '{}' }), env);
     assertEqual((await st.json()).configured, true);
     const root = await worker.fetch(new Request('https://arizo.test/'), env);
@@ -619,9 +620,19 @@ describe('Wizard — unfinished setup must not expose the panel', () => {
     assertEqual(res.headers.get('Location'), '/setup?required=1');
   });
 
-  it('should never trap a worker that has no D1 to hold the marker', async () => {
-    assertEqual((await get({ ...createEnv() }, '/')).status, 200);
-    assertEqual((await get(envWith({ withDb: false }), '/')).status, 200);
+  it('should send a worker with only KV (no D1, no accounts, no marker) to /setup too', async () => {
+    for (const env of [{ ...createEnv() }, envWith({ withDb: false })]) {
+      const res = await get(env, '/');
+      assertEqual(res.status, 302);
+      assertEqual(res.headers.get('Location'), '/setup?required=1');
+    }
+  });
+
+  it('should send a worker with only D1 (no KV) to /setup instead of failing', async () => {
+    const env = { DB: envWith().DB };
+    const res = await get(env, '/');
+    assertEqual(res.status, 302);
+    assertEqual(res.headers.get('Location'), '/setup?required=1');
   });
 
   it('should write the completion marker in the finalize step', async () => {
@@ -669,6 +680,8 @@ describe('Wizard — a fresh worker only ever shows /setup', () => {
 
   it('should treat a worker with storage bindings as set up only once it is finished', async () => {
     const env = createEnv();
+    assertEqual((await worker.fetch(new Request('https://arizo.test/'), env)).status, 302);
+    await env.KV.put('users_list', JSON.stringify(['boss']));
     assertEqual((await worker.fetch(new Request('https://arizo.test/'), env)).status, 200);
     assertEqual((await worker.fetch(new Request('https://arizo.test/'), env)).status, 200);
   });
