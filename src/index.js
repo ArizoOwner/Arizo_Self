@@ -258,6 +258,21 @@ function isSetupRequired(env) {
   return !env || (!env.KV && !env.DB);
 }
 
+// Worker دارای D1 که ویزارد را کامل نکرده (setup:complete ندارد) و هنوز کاربری هم ندارد → پنل نباید باز شود
+async function isWizardIncomplete(env) {
+  if (env._setupDone) return false;
+  if (!env.DB) { env._setupDone = true; return false; }
+  try {
+    const row = await env.DB.prepare("SELECT 1 AS x FROM kv_store WHERE key = 'setup:complete'").first();
+    if (row) { env._setupDone = true; return false; }
+  } catch (_) {}
+  try {
+    const users = await env.KV.get('users_list', 'json');
+    if (Array.isArray(users) && users.length > 0) { env._setupDone = true; return false; }
+  } catch (_) {}
+  return true;
+}
+
 export function resetStorageCachesForTests() {
   storageMemCache.clear();
   authTokensCache.clear();
@@ -570,6 +585,10 @@ export default {
         }
         return json({ ok: false, error: 'setup_required', setup: '/setup', fa: 'این Worker هنوز راه‌اندازی نشده است؛ ویزارد /setup را باز کنید.', en: 'This Worker is not set up yet; open the /setup wizard.' }, 503, { 'Cache-Control': 'no-store' });
       }
+    }
+
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/admin' || url.pathname === '/admin/') && await isWizardIncomplete(env)) {
+      return new Response(null, { status: 302, headers: { 'Location': '/setup', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
     }
 
     // ۱. سرو رابط کاربری پنل با اعتبارسنجی شرطی ETag و کش هوشمند RAM
