@@ -1059,14 +1059,14 @@ export function setupWizardHTML(env = {}, url = {}) {
             </div>
             <div class="form-group">
               <label class="form-label">شناسه KV Namespace (KV ID)</label>
-              <input type="text" id="cfgKvId" class="input-text" placeholder="مثال: b56bacf321a54731ba4a1e69a5619898" oninput="handleConfigChange()">
+              <input type="text" id="cfgKvId" class="input-text" placeholder="مثال: 0123456789abcdef0123456789abcdef" oninput="handleConfigChange()">
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">شناسه پایگاه داده D1 (Database ID)</label>
-              <input type="text" id="cfgD1Id" class="input-text" placeholder="مثال: 4edef38a-95d4-4459-a904-5248a8952363" oninput="handleConfigChange()">
+              <input type="text" id="cfgD1Id" class="input-text" placeholder="مثال: 00000000-0000-4000-8000-000000000000" oninput="handleConfigChange()">
             </div>
             <div class="form-group">
               <label class="form-label">
@@ -1633,7 +1633,7 @@ export function setupWizardHTML(env = {}, url = {}) {
       var extractedCount = 0;
       var extractedItems = [];
 
-      // 1. جستجوی UUID دیتابیس D1 (مانند 4edef38a-95d4-4459-a904-5248a8952363)
+      // 1. جستجوی UUID دیتابیس D1 (مانند 00000000-0000-4000-8000-000000000000)
       var d1Match = text.match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
       if (d1Match && d1Match[1]) {
         wizardState.d1Id = d1Match[1];
@@ -1642,7 +1642,7 @@ export function setupWizardHTML(env = {}, url = {}) {
         extractedItems.push('شناسه D1');
       }
 
-      // 2. جستجوی شناسه ۳۲ کاراکتری KV (مانند b56bacf321a54731ba4a1e69a5619898)
+      // 2. جستجوی شناسه ۳۲ کاراکتری KV (مانند 0123456789abcdef0123456789abcdef)
       // پرهیز از تکرار همان UUID بدون دش
       var kvMatches = text.match(/([0-9a-f]{32})/gi);
       if (kvMatches && kvMatches.length > 0) {
