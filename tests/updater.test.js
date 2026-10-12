@@ -79,8 +79,9 @@ async function registerOwner(env, ip) {
   return (await r.json()).token;
 }
 
+let adminIpCounter = 0;
 const adminReq = (path, token, init = {}) => new Request('https://mypanel.acme.workers.dev' + path, {
-  ...init, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'cf-connecting-ip': '198.51.100.90', ...(init.headers || {}) }
+  ...init, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token, 'cf-connecting-ip': '203.0.113.' + (1 + (adminIpCounter++ % 250)), ...(init.headers || {}) }
 });
 
 describe('Updater — version check', () => {
@@ -471,5 +472,23 @@ describe('Updater — GitHub rate limits', () => {
       try { await checkForUpdate({ fresh: true }); } catch (e) { code = e.code; }
       assertEqual(code, 'no_release_info');
     } finally { globalThis.fetch = original; resetReleaseCache(); }
+  });
+});
+
+describe('Updater — no per-isolate caching of stored credentials', () => {
+  it('should read credentials fresh from storage every time so a disconnect is seen by every isolate', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.98');
+    const net = mockNetwork();
+    try {
+      const con = await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: JSON.stringify({ cfToken: CF_TOKEN }) }), env);
+      const conBody = await con.text();
+      assertEqual(con.status, 200, conBody);
+      const first = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json();
+      assertEqual(first.connected, true, JSON.stringify(first));
+      // یک isolate دیگر مستقیماً در KV خام می‌نویسد؛ این isolate باید فوراً ببیند
+      await env.KV_RAW.put('updater:creds', '');
+      assertEqual((await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json()).connected, false);
+    } finally { net.restore(); }
   });
 });
