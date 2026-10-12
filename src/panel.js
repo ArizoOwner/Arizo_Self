@@ -5556,7 +5556,7 @@ export function panelHTML(env, options = {}) {
           <button type="button" class="feature-cat-btn active" onclick="filterFeatureCards('all', this)" data-cat="all">
             <span>🌟</span>
             <span data-i18n="featCatAll">همه امکانات</span>
-            <span class="cat-count">۱۸</span>
+            <span class="cat-count">۱۹</span>
           </button>
           <button type="button" class="feature-cat-btn" onclick="filterFeatureCards('ai', this)" data-cat="ai">
             <span>🤖</span>
@@ -5566,12 +5566,12 @@ export function panelHTML(env, options = {}) {
           <button type="button" class="feature-cat-btn" onclick="filterFeatureCards('security', this)" data-cat="security">
             <span>🛡️</span>
             <span data-i18n="featCatSecurity">امنیت و پایش</span>
-            <span class="cat-count">۵</span>
+            <span class="cat-count">۷</span>
           </button>
           <button type="button" class="feature-cat-btn" onclick="filterFeatureCards('profile', this)" data-cat="profile">
             <span>⚡</span>
             <span data-i18n="featCatProfile">ساعت و نمایه</span>
-            <span class="cat-count">۴</span>
+            <span class="cat-count">۳</span>
           </button>
           <button type="button" class="feature-cat-btn" onclick="filterFeatureCards('cloud', this)" data-cat="cloud">
             <span>👑</span>
@@ -5868,6 +5868,22 @@ export function panelHTML(env, options = {}) {
               </div>
               <div class="feature-item-desc" data-i18n="featWebappDesc">
                 مدیریت کامل استودیوی سلف‌بات مستقیماً از داخل کلاینت رسمی تلگرام با احراز هویت امن و هماهنگی با تم تلگرام.
+              </div>
+            </div>
+          </div>
+
+          <!-- ۱۹. اعلان چت‌ها با ربات جداگانه -->
+          <div class="feature-card-item" data-cat="security">
+            <div class="feature-item-icon">
+              <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+            </div>
+            <div class="feature-item-body">
+              <div class="feature-item-top">
+                <span class="feature-item-title" data-i18n="featWatchTitle">اعلان چت‌ها با ربات جداگانه</span>
+                <span class="feature-item-badge" data-i18n="featWatchBadge">جدید · ادمین‌ها و افراد مشخص</span>
+              </div>
+              <div class="feature-item-desc" data-i18n="featWatchDesc">
+                پیام‌های چت‌ها، گروه‌ها و پیوی‌های انتخابی را (همه پیام‌ها، فقط ادمین‌ها و سازنده، یا فقط افراد مشخص) از طریق یک ربات تلگرامی مجزا از ربات دستیار اصلی برایتان نوتیف می‌کند؛ با میان‌بر <code>.watch</code> و دکمه باز کردن پیام.
               </div>
             </div>
           </div>
@@ -6677,6 +6693,9 @@ export function panelHTML(env, options = {}) {
       'دستیار هوشمند هوش مصنوعی': 'Smart AI Auto-Reply',
       'موتورهای نسل جدید': 'Next-Gen AI Models',
       'پاسخگویی خودکار و هوشمند به پیام‌ها با مدل‌های پیشرفته AI (Claude, GPT, Gemini)، تشخیص هوشمند وضعیت آنلاین/آفلاین و مکالمه کاملاً طبیعی.': 'Automated conversational responses powered by modern AI engines (Claude, GPT, Gemini) with smart online/offline detection.',
+      'اعلان چت‌ها با ربات جداگانه': 'Chat Alerts via a Separate Bot',
+      'جدید · ادمین‌ها و افراد مشخص': 'New · Admins & Specific People',
+      'پیام‌های چت‌ها، گروه‌ها و پیوی‌های انتخابی را (همه پیام‌ها، فقط ادمین‌ها و سازنده، یا فقط افراد مشخص) از طریق یک ربات تلگرامی مجزا از ربات دستیار اصلی برایتان نوتیف می‌کند؛ با میان‌بر <code>.watch</code> و دکمه باز کردن پیام.': 'Get notified about messages in selected chats, groups and DMs (all messages, only admins & owner, or only specific people) through a Telegram bot separate from your main assistant bot — with the <code>.watch</code> shortcut and an Open Message button.',
       'لیست نادیده‌گیری هوش مصنوعی': 'AI Ignored Users List',
       'کنترل سفارشی چت': 'Custom Chat Control',
       'تعیین لیست سیاه کاربران و چت‌های مستثنی‌شده از پاسخ خودکار با شناسه عددی یا یوزرنیم، همراه با تست زنده سلامت API Key.': 'Configure blacklists of users and chats excluded from AI responses by ID or username, with live API health testing.',
