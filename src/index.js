@@ -425,7 +425,7 @@ let activeUsersETag = null;
 let cachedPanelHtml = null;
 let cachedAdminHtml = null;
 let cachedWizardHtml = null;
-const STATIC_ASSET_ETAG = '"arizo-v4.6.0-watch-alerts"';
+const STATIC_ASSET_ETAG = '"arizo-v4.6.1-features-popup"';
 let cachedFaviconResponse = null;
 
 export default {
