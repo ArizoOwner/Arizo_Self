@@ -24,6 +24,7 @@ import { CustomFile } from 'telegram/client/uploads.js';
 import { strippedPhotoToJpg } from 'telegram/Utils.js';
 import { getStylizedTime, renderDynamicBio, isSleepTime } from '../src/clock.js';
 import { decryptSession } from '../src/crypto.js';
+import { pickNotifyingRule, buildAlertText, buildMessageLink, bareChatId, sanitizeWatchAlerts, cleanTarget } from '../src/modules/watchAlerts.js';
 
 const CLOUDFLARE_URL = (process.env.CLOUDFLARE_URL || 'https://arizo-self.arizosupport.workers.dev').replace(/\/+$/, '');
 const RUNNER_SECRET = process.env.RUNNER_SECRET || process.env.ADMIN_PASSWORD || 'admin_liquid_secret_2026';
@@ -982,6 +983,137 @@ async function forwardGhostMessage(botToken, chatId, senderName, senderUsername,
   return sendBotTelegramMessage(botToken, chatId, text, keyboard);
 }
 
+// ==========================================
+// 🔔 Watch Alerts — اعلان پیام چت‌های انتخاب‌شده در ربات جداگانه
+// ==========================================
+const WATCH_RATE_LIMIT_PER_MIN = 20;
+const WATCH_ADMIN_CACHE_TTL = 10 * 60 * 1000;
+
+function getWatchMediaLabel(message) {
+  if (!message?.media) return '';
+  if (message.photo) return 'تصویر';
+  if (message.video) return message.videoNote ? 'ویدیو مسیج' : 'ویدیو';
+  if (message.voice) return 'پیام صوتی';
+  if (message.audio) return 'موسیقی';
+  if (message.sticker) return 'استیکر';
+  if (message.gif) return 'گیف';
+  if (message.document) return 'فایل';
+  if (message.poll) return 'نظرسنجی';
+  return 'رسانه';
+}
+
+/** آیا فرستنده در این چت ادمین/سازنده است؟ (کش ۱۰ دقیقه‌ای برای جلوگیری از فشار روی API تلگرام) */
+async function isSenderChatAdmin(entry, message, chat, senderIdStr) {
+  if (message.post) return true; // پست کانال همیشه از طرف ادمین‌هاست
+  if (senderIdStr && bareChatId(senderIdStr) === bareChatId(chat.id)) return true; // ادمین ناشناس گروه
+  if (!senderIdStr) return false;
+
+  entry.watchAdminCache = entry.watchAdminCache || new Map();
+  const key = `${bareChatId(chat.id)}:${senderIdStr}`;
+  const hit = entry.watchAdminCache.get(key);
+  if (hit && Date.now() - hit.ts < WATCH_ADMIN_CACHE_TTL) return hit.value;
+
+  let value = false;
+  try {
+    if (message.isChannel) {
+      const res = await entry.client.invoke(new Api.channels.GetParticipant({
+        channel: await message.getInputChat(),
+        participant: await message.getInputSender()
+      }));
+      const cls = res?.participant?.className;
+      value = cls === 'ChannelParticipantCreator' || cls === 'ChannelParticipantAdmin';
+    } else {
+      const full = await entry.client.invoke(new Api.messages.GetFullChat({ chatId: BigInt(bareChatId(chat.id)) }));
+      const list = full?.fullChat?.participants?.participants || [];
+      value = list.some(p => p.userId?.toString() === senderIdStr &&
+        (p.className === 'ChatParticipantAdmin' || p.className === 'ChatParticipantCreator'));
+    }
+  } catch (_) {
+    value = false; // USER_NOT_PARTICIPANT یا نبود دسترسی => ادمین نیست
+  }
+  setBoundedMap(entry.watchAdminCache, key, { value, ts: Date.now() }, 2000);
+  return value;
+}
+
+/** محدودکننده نرخ: بیش از سقف در دقیقه حذف و در پایان بازه یک خلاصه ارسال می‌شود */
+function watchRateGate(entry) {
+  const now = Date.now();
+  const w = entry.watchRate = entry.watchRate || { start: now, count: 0, dropped: 0 };
+  let summary = 0;
+  if (now - w.start >= 60000) {
+    summary = w.dropped;
+    w.start = now; w.count = 0; w.dropped = 0;
+  }
+  if (w.count >= WATCH_RATE_LIMIT_PER_MIN) {
+    w.dropped++;
+    return { allowed: false, summary: 0 };
+  }
+  w.count++;
+  return { allowed: true, summary };
+}
+
+/**
+ * بررسی پیام ورودی با قوانین اعلان و ارسال نوتیف از ربات اعلان.
+ * هرگز خطا پرتاب نمی‌کند و جریان اصلی پردازش پیام را مسدود نمی‌کند.
+ */
+async function processWatchAlert(entry, username, message, ctx) {
+  const wa = entry.settings?.watchAlerts;
+  if (!wa?.enabled || !wa.botToken || !wa.chatId || !Array.isArray(wa.rules) || wa.rules.length === 0) return;
+  if (ctx.isOut) return;
+
+  const senderIdStr = ctx.senderIdStr;
+  // پیام ربات دستیار خود کاربر و اعلان‌های سرویس تلگرام هرگز اعلان نمی‌شوند
+  const mainBotId = entry.settings?.bot?.token ? entry.settings.bot.token.split(':')[0] : null;
+  const alertBotId = wa.botToken.split(':')[0];
+  if (senderIdStr && (senderIdStr === mainBotId || senderIdStr === alertBotId || senderIdStr === '777000')) return;
+
+  // اطلاعات چت (با کش)
+  entry.watchChatCache = entry.watchChatCache || new Map();
+  const chatKey = ctx.chatIdStr;
+  let chat = entry.watchChatCache.get(chatKey);
+  if (!chat) {
+    let ent = null;
+    try { ent = await message.getChat(); } catch (_) {}
+    const sender = !ctx.isPrivate ? null : await message.getSender().catch(() => null);
+    chat = {
+      id: chatKey,
+      kind: ctx.isPrivate ? 'private' : (message.isChannel && !message.isGroup ? 'channel' : 'group'),
+      username: ent?.username || sender?.username || '',
+      title: ctx.isPrivate
+        ? ([sender?.firstName, sender?.lastName].filter(Boolean).join(' ') || sender?.username || chatKey)
+        : (ent?.title || ent?.username || chatKey)
+    };
+    setBoundedMap(entry.watchChatCache, chatKey, chat, 500);
+  }
+
+  const sender = await message.getSender().catch(() => null);
+  const senderInfo = {
+    id: senderIdStr,
+    username: sender?.username || '',
+    name: sender ? ([sender.firstName, sender.lastName].filter(Boolean).join(' ') || sender.title || sender.username || '') : ''
+  };
+
+  const rule = await pickNotifyingRule(wa.rules, chat, senderInfo, () => isSenderChatAdmin(entry, message, chat, senderIdStr));
+  if (!rule) return;
+
+  const gate = watchRateGate(entry);
+  if (!gate.allowed) return;
+  if (gate.summary > 0) {
+    await sendBotTelegramMessage(wa.botToken, wa.chatId, `ℹ️ <b>${gate.summary}</b> اعلان در دقیقه گذشته به‌دلیل سقف ${WATCH_RATE_LIMIT_PER_MIN} اعلان در دقیقه ارسال نشد.`);
+  }
+
+  const text = buildAlertText({
+    chat, sender: senderInfo, rule,
+    text: message.text || message.message || '',
+    mediaLabel: getWatchMediaLabel(message),
+    timeLabel: new Date().toLocaleTimeString('fa-IR', { timeZone: 'Asia/Tehran' })
+  });
+  const link = buildMessageLink(chat, message.id);
+  const keyboard = link ? { inline_keyboard: [[{ text: '🔗 باز کردن پیام', url: link }]] } : null;
+  const ok = await sendBotTelegramMessage(wa.botToken, wa.chatId, text, keyboard);
+  if (ok) console.log(`🔔 [${username}] Watch alert sent for chat ${chat.title || chat.id} (rule: ${rule.mode})`);
+}
+
 /**
  * تشخیص دقیق شناسه عددی مخاطب گفتگو (تفکیک دقیق فرستنده و گیرنده بر اساس جهت پیام)
  */
@@ -1107,7 +1239,8 @@ class TelegramConnectionPool {
           aiContext: userSettings?.aiContext || '',
           aiMaxReplies: userSettings?.aiMaxReplies ?? 3,
           aiCooldown: userSettings?.aiCooldown ?? 5,
-          aiIgnoredUsers: Array.isArray(userSettings?.aiIgnoredUsers) ? userSettings.aiIgnoredUsers : []
+          aiIgnoredUsers: Array.isArray(userSettings?.aiIgnoredUsers) ? userSettings.aiIgnoredUsers : [],
+          watchAlerts: userSettings?.watchAlerts || null
         },
         afkCooldownMap: new Map(),
         aiReplyCountMap: new Map(),
@@ -1200,7 +1333,8 @@ class TelegramConnectionPool {
         aiContext: userSettings.aiContext || '',
         aiMaxReplies: userSettings.aiMaxReplies ?? 3,
         aiCooldown: userSettings.aiCooldown ?? 5,
-        aiIgnoredUsers: Array.isArray(userSettings.aiIgnoredUsers) ? userSettings.aiIgnoredUsers : []
+        aiIgnoredUsers: Array.isArray(userSettings.aiIgnoredUsers) ? userSettings.aiIgnoredUsers : [],
+        watchAlerts: userSettings.watchAlerts || null
       };
       resolveMutedUsernames(entry);
     }
@@ -1286,6 +1420,19 @@ class TelegramConnectionPool {
     // ۲. شناسایی دقیق مخاطب چت و ثبت زنده فعالیت کاربر در صورت ارسال پیام دستی
     const partnerIdStr = getChatPartnerId(message, myId);
     const peerIdStr = partnerIdStr || (message.senderId ? message.senderId.toString() : null) || (message.chatId ? message.chatId.toString() : null);
+
+    // 🔔 اعلان پیام چت‌های انتخاب‌شده در ربات جداگانه (غیرمسدودکننده)
+    if (!isOut && entry.settings?.watchAlerts?.enabled) {
+      const chatIdStr = (isPrivateChat ? peerIdStr : (message.chatId ? message.chatId.toString() : null));
+      if (chatIdStr) {
+        processWatchAlert(entry, username, message, {
+          isOut,
+          isPrivate: isPrivateChat,
+          chatIdStr,
+          senderIdStr: message.senderId ? message.senderId.toString() : (isPrivateChat ? peerIdStr : null)
+        }).catch(err => console.warn(`⚠️ [${username}] Watch alert error:`, err.message));
+      }
+    }
 
     // ثبت زنده فعالیت کاربر در تلگرام و در این چت در صورت ارسال پیام خروجی دستی توسط کاربر
     if (isOut) {
@@ -1630,6 +1777,38 @@ class TelegramConnectionPool {
           await message.edit({ text: `🤖 مدل هوش مصنوعی به <code>${newModel}</code> تغییر یافت.` }).catch(() => {});
         } else {
           await message.edit({ text: `🤖 مدل هوش مصنوعی فعال: <code>${entry.settings.aiModel || 'پیش‌فرض'}</code>\n🌐 ارائه‌دهنده: <code>${entry.settings.aiProvider || 'gemini'}</code>` }).catch(() => {});
+        }
+        setTimeout(() => message.delete({ revoke: true }).catch(() => {}), 4000);
+        return;
+      }
+
+      // 🔔 دستور .watch [all|admins] و .unwatch در همان چتی که نوشته می‌شود
+      const watchMatch = text.match(/^\.(watch|unwatch)(?:\s+(all|admins|همه|ادمین|ادمین‌ها))?$/i);
+      if (watchMatch) {
+        const wa = entry.settings.watchAlerts;
+        const chatIdStr = isPrivateChat ? partnerIdStr : (message.chatId ? message.chatId.toString() : null);
+        if (!wa?.botToken || !chatIdStr) {
+          await message.edit({ text: '⚠️ ابتدا در پنل وب، «ربات اعلان» را متصل کنید (تب اعلان چت‌ها).' }).catch(() => {});
+        } else {
+          const ent = await message.getChat().catch(() => null);
+          const sameChat = (r) => /^-?\d+$/.test(cleanTarget(r.target))
+            ? bareChatId(cleanTarget(r.target)) === bareChatId(chatIdStr)
+            : (!!ent?.username && cleanTarget(r.target) === ent.username.toLowerCase());
+          let rules = Array.isArray(wa.rules) ? wa.rules.filter(r => !sameChat(r)) : [];
+          const chatTitle = ent?.title || [ent?.firstName, ent?.lastName].filter(Boolean).join(' ') || ent?.username || chatIdStr;
+          let reply;
+          if (watchMatch[1].toLowerCase() === 'unwatch') {
+            reply = `🔕 اعلان چت «${chatTitle}» غیرفعال شد.`;
+          } else {
+            const adminsOnly = /^(admins|ادمین|ادمین‌ها)$/i.test(watchMatch[2] || '') && !isPrivateChat;
+            rules.push({ target: chatIdStr, mode: adminsOnly ? 'admins' : 'all', users: [], label: chatTitle });
+            wa.enabled = true;
+            reply = `🔔 چت «${chatTitle}» پایش شد (${adminsOnly ? 'فقط پیام ادمین‌ها و سازنده' : 'همه پیام‌ها'}).`;
+          }
+          const clean = sanitizeWatchAlerts({ rules }, wa);
+          wa.rules = clean.rules;
+          syncUserFeatureToCloudflare(username, { watchAlerts: { rules: clean.rules } });
+          await message.edit({ text: reply }).catch(() => {});
         }
         setTimeout(() => message.delete({ revoke: true }).catch(() => {}), 4000);
         return;
