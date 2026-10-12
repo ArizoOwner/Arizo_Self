@@ -249,6 +249,10 @@ function getUnifiedStorage(env) {
   return storage;
 }
 
+function isSetupRequired(env) {
+  return !env || !env.ADMIN_PASSWORD || (!env.KV && !env.DB);
+}
+
 function initEnvStorage(env) {
   if (!env) return;
   if (!env.KV_RAW) {
@@ -485,6 +489,7 @@ let cachedFaviconResponse = null;
 export default {
   async fetch(request, env) {
     try {
+      const needsSetup = isSetupRequired(env);
       initEnvStorage(env);
       const url = new URL(request.url);
       if (request.method === 'OPTIONS') {
@@ -544,6 +549,18 @@ export default {
         return new Response(null, { status: 304, headers: cachedFaviconResponse.headers });
       }
       return cachedFaviconResponse.clone();
+    }
+
+    // 🧭 Worker بدون KV/D1/رمز مدیر (دیپلوی خام worker.js): پنل به ویزارد هدایت می‌شود و بقیهٔ مسیرها تا پایان راه‌اندازی بسته‌اند
+    if (needsSetup) {
+      const p = url.pathname;
+      const wizardPath = p === '/setup' || p === '/wizard' || p.startsWith('/api/setup/');
+      if (!wizardPath && p !== '/favicon.ico' && p !== '/favicon.svg') {
+        if (request.method === 'GET' && (p === '/' || p === '/admin' || p === '/admin/')) {
+          return new Response(null, { status: 302, headers: { 'Location': '/setup', 'Cache-Control': 'no-store', ...SECURITY_HEADERS } });
+        }
+        return json({ ok: false, error: 'setup_required', setup: '/setup', fa: 'این Worker هنوز راه‌اندازی نشده است؛ ویزارد /setup را باز کنید.', en: 'This Worker is not set up yet; open the /setup wizard.' }, 503, { 'Cache-Control': 'no-store' });
+      }
     }
 
     // ۱. سرو رابط کاربری پنل با اعتبارسنجی شرطی ETag و کش هوشمند RAM
@@ -634,6 +651,9 @@ export default {
       }
       const body = await request.json().catch(() => ({}));
       const step = url.pathname.slice('/api/setup/'.length);
+      if (step === 'status') {
+        return json({ ok: true, configured: !needsSetup }, 200, { 'Cache-Control': 'no-store' });
+      }
       const out = await handleWizardApi(step, body);
       return json(out.data, out.status, { 'Cache-Control': 'no-store' });
     }
@@ -5219,6 +5239,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
   // ⏱️ چرخه کرون خودکار (پشتیبان هوشمند در صورت قطعی رانر خارجی)
   // ==========================================
   async scheduled(event, env, ctx) {
+    if (isSetupRequired(env)) return;
     initEnvStorage(env);
     ctx.waitUntil(secureWebhooks(env).catch(() => {}));
     ctx.waitUntil((async () => {
