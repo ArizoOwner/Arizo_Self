@@ -485,7 +485,7 @@ let activeUsersETag = null;
 // ⚡ کش پایدار رابط‌های گرافیکی در حافظه ایزولیت ورکر (Zero Redundant HTML String Interpolation)
 let cachedPanelHtml = null;
 let cachedAdminHtml = null;
-let cachedWizardHtml = null;
+const cachedWizardHtml = { connect: null, fresh: null };
 const STATIC_ASSET_ETAG = '"arizo-v4.6.2-security"';
 let cachedFaviconResponse = null;
 
@@ -620,7 +620,7 @@ export default {
 
     // 🚀 ویزارد تعاملی و گرافیکی ستاپ و راه‌اندازی شخصی (Self-Hosting Setup Wizard)
     if (url.pathname === '/setup' || url.pathname === '/wizard') {
-      const etag = '"arizo-wiz-v4.0-auto"';
+      const etag = needsSetup ? '"arizo-wiz-v4.1-connect"' : '"arizo-wiz-v4.1-auto"';
       if (etagMatches(request.headers.get('if-none-match'), etag)) {
         return new Response(null, {
           status: 304,
@@ -631,10 +631,11 @@ export default {
           }
         });
       }
-      if (!cachedWizardHtml) {
-        cachedWizardHtml = setupWizardHTML(env, url);
+      const wizKey = needsSetup ? 'connect' : 'fresh';
+      if (!cachedWizardHtml[wizKey]) {
+        cachedWizardHtml[wizKey] = setupWizardHTML(env, url, { connect: needsSetup });
       }
-      return new Response(cachedWizardHtml, {
+      return new Response(cachedWizardHtml[wizKey], {
         headers: {
           'Content-Type': 'text/html;charset=utf-8',
           'ETag': etag,
