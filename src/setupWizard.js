@@ -108,7 +108,7 @@ footer{text-align:center;color:var(--dim);font-size:.76rem;margin-top:24px}
 </header>
 
 <div class="progress"><i id="bar"></i></div>
-<div class="notice hidden" id="connectBanner"><b data-t="cbTitle">🔗 این Worker هنوز راه‌اندازی نشده است</b><span data-t="cbText">فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رمز مدیر را تنظیم می‌کند.</span></div>
+<div class="notice hidden" id="connectBanner"><b data-t="cbTitle">🔗 این Worker هنوز راه‌اندازی نشده است</b><span data-t="cbText">فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رانر را آماده می‌کند.</span></div>
 
 <!-- مرحله ۱: Cloudflare -->
 <section class="card" id="s1">
@@ -168,15 +168,13 @@ footer{text-align:center;color:var(--dim);font-size:.76rem;margin-top:24px}
 <!-- نتیجه -->
 <section class="card result hidden" id="resultCard">
   <h2>🎉 <span data-t="done">نصب کامل شد</span></h2>
-  <p class="lead" data-t="doneLead">این اطلاعات را همین الان ذخیره کنید؛ رمز بعداً قابل مشاهده نیست.</p>
+  <p class="lead" data-t="doneLead">آخرین قدم: همین حالا در سایت ثبت‌نام کنید. اولین حسابی که ساخته شود، مدیر کل است و به بخش مدیریت هم دسترسی دارد.</p>
   <div class="kv">
     <div><span data-t="kvUrl">آدرس پنل</span><code id="rUrl"></code><button type="button" data-copy="rUrl" data-t="copy">کپی</button></div>
-    <div><span data-t="kvAdmin">ورود مدیر</span><code id="rAdmin"></code><button type="button" data-copy="rAdmin" data-t="copy">کپی</button></div>
-    <div><span data-t="kvPass">رمز مدیر</span><code id="rPass"></code><button type="button" data-copy="rPass" data-t="copy">کپی</button></div>
     <div id="rRepoRow"><span data-t="kvRepo">ریپوی شما</span><code id="rRepo"></code><button type="button" data-copy="rRepo" data-t="copy">کپی</button></div>
   </div>
   <div class="warnbox hidden" id="rWarn"></div>
-  <div class="row"><a class="btn" id="rOpen" href="#" target="_blank" rel="noopener" data-t="openPanel">🚀 ورود به پنل</a><a class="btn ghost hidden" id="rActions" href="#" target="_blank" rel="noopener" data-t="openActions">⚙️ مشاهدهٔ رانر</a><button class="btn ghost" id="dlCreds" type="button" data-t="download">⬇️ دانلود اطلاعات ورود</button></div>
+  <div class="row"><a class="btn" id="rOpen" href="#" target="_blank" rel="noopener" data-t="openPanel">🚀 ساخت حساب مدیر</a><a class="btn ghost hidden" id="rActions" href="#" target="_blank" rel="noopener" data-t="openActions">⚙️ مشاهدهٔ رانر</a></div>
 </section>
 
 <footer>Arizo Self · ${WIZARD_VERSION}</footer>
@@ -187,8 +185,8 @@ footer{text-align:center;color:var(--dim);font-size:.76rem;margin-top:24px}
 'use strict';
 var ORIGIN='';
 var T={
-fa:{studio:'🚪 استودیو',s1title:'اتصال به Cloudflare',s1lead:'برای ساخت دیتابیس و استقرار پنل، یک توکن Cloudflare لازم است.',s1a:'با دکمهٔ زیر صفحهٔ ساخت توکن را باز کنید (دسترسی‌ها از قبل انتخاب شده‌اند).',s1b:'گزینهٔ Continue to summary و بعد Create Token را بزنید.',s1c:'توکن را کپی کنید و پایین بچسبانید.',s1open:'🔑 ساخت توکن Cloudflare',s1label:'توکن Cloudflare',s1btn:'بررسی توکن',subLabel:'اکانت جدید است؛ یک نام برای آدرس workers.dev انتخاب کنید',subBtn:'ثبت نام',acctLabel:'اکانت Cloudflare',s2title:'اتصال به GitHub (برای رانر ۲۴ ساعته)',s2lead:'رانر ساعت و ربات را روی GitHub Actions اجرا می‌کند. ویزارد پروژه را برایتان فورک می‌کند و همه‌چیز را تنظیم می‌کند.',s2a:'با دکمهٔ زیر توکن بسازید (دسترسی‌های repo و workflow انتخاب شده‌اند).',s2b:'پایین صفحه Generate token را بزنید و توکن را کپی کنید.',s2open:'🔑 ساخت توکن GitHub',s2label:'توکن GitHub',s2btn:'بررسی توکن',skipGh:'رانر گیت‌هاب را فعلاً نمی‌خواهم (فقط پنل وب)',s3title:'نصب',s3label:'نام Worker',exists:'یک Worker با این نام از قبل در اکانت شما هست؛ نصب آن را به‌روزرسانی می‌کند و دیتابیس فعلی دست‌نخورده می‌ماند.',install:'☁️ نصب',cbTitle:'🔗 این Worker هنوز راه‌اندازی نشده است',cbText:'فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رمز مدیر را تنظیم می‌کند.',s3titleC:'اتصال و راه‌اندازی',s3labelC:'نام این Worker',installC:'🔗 اتصال و راه‌اندازی',hint:'توکن‌ها فقط در همین صفحه استفاده می‌شوند و جایی ذخیره نمی‌شوند.',progress:'در حال نصب…',retry:'🔁 تلاش دوباره',done:'نصب کامل شد',doneLead:'این اطلاعات را همین الان ذخیره کنید؛ رمز بعداً قابل مشاهده نیست.',kvUrl:'آدرس پنل',kvAdmin:'ورود مدیر',kvPass:'رمز مدیر',kvRepo:'ریپوی شما',copy:'کپی',openPanel:'🚀 ورود به پنل',openActions:'⚙️ مشاهدهٔ رانر',download:'⬇️ دانلود اطلاعات ورود'},
-en:{studio:'🚪 Studio',s1title:'Connect Cloudflare',s1lead:'A Cloudflare token is needed to create the database and deploy the panel.',s1a:'Open the token page with the button below (permissions are pre-selected).',s1b:'Click Continue to summary, then Create Token.',s1c:'Copy the token and paste it below.',s1open:'🔑 Create Cloudflare token',s1label:'Cloudflare token',s1btn:'Verify token',subLabel:'New account — pick a name for your workers.dev address',subBtn:'Save name',acctLabel:'Cloudflare account',s2title:'Connect GitHub (for the 24/7 runner)',s2lead:'The runner executes the clock and bot on GitHub Actions. The wizard forks the project and configures everything.',s2a:'Create a token with the button below (repo and workflow scopes are pre-selected).',s2b:'Click Generate token at the bottom and copy it.',s2open:'🔑 Create GitHub token',s2label:'GitHub token',s2btn:'Verify token',skipGh:'Skip the GitHub runner for now (web panel only)',s3title:'Install',s3label:'Worker name',exists:'A Worker with this name already exists in your account; installing will update it and keep the current database untouched.',install:'☁️ Install',cbTitle:'🔗 This Worker is not set up yet',cbText:'You deployed the file to Cloudflare; the wizard will now create the databases, attach them to this very Worker and set the admin password.',s3titleC:'Connect and set up',s3labelC:'Name of this Worker',installC:'🔗 Connect and set up',hint:'Tokens are only used on this page and are never stored.',progress:'Installing…',retry:'🔁 Retry',done:'Installation complete',doneLead:'Save this now — the password cannot be shown again.',kvUrl:'Panel URL',kvAdmin:'Admin login',kvPass:'Admin password',kvRepo:'Your repository',copy:'Copy',openPanel:'🚀 Open panel',openActions:'⚙️ View runner',download:'⬇️ Download credentials'}
+fa:{studio:'🚪 استودیو',s1title:'اتصال به Cloudflare',s1lead:'برای ساخت دیتابیس و استقرار پنل، یک توکن Cloudflare لازم است.',s1a:'با دکمهٔ زیر صفحهٔ ساخت توکن را باز کنید (دسترسی‌ها از قبل انتخاب شده‌اند).',s1b:'گزینهٔ Continue to summary و بعد Create Token را بزنید.',s1c:'توکن را کپی کنید و پایین بچسبانید.',s1open:'🔑 ساخت توکن Cloudflare',s1label:'توکن Cloudflare',s1btn:'بررسی توکن',subLabel:'اکانت جدید است؛ یک نام برای آدرس workers.dev انتخاب کنید',subBtn:'ثبت نام',acctLabel:'اکانت Cloudflare',s2title:'اتصال به GitHub (برای رانر ۲۴ ساعته)',s2lead:'رانر ساعت و ربات را روی GitHub Actions اجرا می‌کند. ویزارد پروژه را برایتان فورک می‌کند و همه‌چیز را تنظیم می‌کند.',s2a:'با دکمهٔ زیر توکن بسازید (دسترسی‌های repo و workflow انتخاب شده‌اند).',s2b:'پایین صفحه Generate token را بزنید و توکن را کپی کنید.',s2open:'🔑 ساخت توکن GitHub',s2label:'توکن GitHub',s2btn:'بررسی توکن',skipGh:'رانر گیت‌هاب را فعلاً نمی‌خواهم (فقط پنل وب)',s3title:'نصب',s3label:'نام Worker',exists:'یک Worker با این نام از قبل در اکانت شما هست؛ نصب آن را به‌روزرسانی می‌کند و دیتابیس فعلی دست‌نخورده می‌ماند.',install:'☁️ نصب',cbTitle:'🔗 این Worker هنوز راه‌اندازی نشده است',cbText:'فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رانر را آماده می‌کند.',s3titleC:'اتصال و راه‌اندازی',s3labelC:'نام این Worker',installC:'🔗 اتصال و راه‌اندازی',hint:'توکن‌ها فقط در همین صفحه استفاده می‌شوند و جایی ذخیره نمی‌شوند.',progress:'در حال نصب…',retry:'🔁 تلاش دوباره',done:'نصب کامل شد',doneLead:'آخرین قدم: همین حالا در سایت ثبت‌نام کنید. اولین حسابی که ساخته شود، مدیر کل است و به بخش مدیریت هم دسترسی دارد.',doneWarn:'تا وقتی خودتان ثبت‌نام نکرده‌اید، هر کسی که آدرس را بداند می‌تواند اولین حساب را بسازد؛ پس همین حالا این کار را انجام دهید.',kvUrl:'آدرس پنل',kvRepo:'ریپوی شما',copy:'کپی',openPanel:'🚀 ساخت حساب مدیر',openActions:'⚙️ مشاهدهٔ رانر'},
+en:{studio:'🚪 Studio',s1title:'Connect Cloudflare',s1lead:'A Cloudflare token is needed to create the database and deploy the panel.',s1a:'Open the token page with the button below (permissions are pre-selected).',s1b:'Click Continue to summary, then Create Token.',s1c:'Copy the token and paste it below.',s1open:'🔑 Create Cloudflare token',s1label:'Cloudflare token',s1btn:'Verify token',subLabel:'New account — pick a name for your workers.dev address',subBtn:'Save name',acctLabel:'Cloudflare account',s2title:'Connect GitHub (for the 24/7 runner)',s2lead:'The runner executes the clock and bot on GitHub Actions. The wizard forks the project and configures everything.',s2a:'Create a token with the button below (repo and workflow scopes are pre-selected).',s2b:'Click Generate token at the bottom and copy it.',s2open:'🔑 Create GitHub token',s2label:'GitHub token',s2btn:'Verify token',skipGh:'Skip the GitHub runner for now (web panel only)',s3title:'Install',s3label:'Worker name',exists:'A Worker with this name already exists in your account; installing will update it and keep the current database untouched.',install:'☁️ Install',cbTitle:'🔗 This Worker is not set up yet',cbText:'You deployed the file to Cloudflare; the wizard will now create the databases, attach them to this very Worker and prepare the runner.',s3titleC:'Connect and set up',s3labelC:'Name of this Worker',installC:'🔗 Connect and set up',hint:'Tokens are only used on this page and are never stored.',progress:'Installing…',retry:'🔁 Retry',done:'Installation complete',doneLead:'Last step: register on the site right now. The first account created becomes the owner and also gets access to the management area.',doneWarn:'Until you register yourself, anyone who knows the address can create the first account, so do it right away.',kvUrl:'Panel URL',kvRepo:'Your repository',copy:'Copy',openPanel:'🚀 Create the owner account',openActions:'⚙️ View runner'}
 };
 var lang=document.documentElement.getAttribute('lang')==='en'?'en':'fa';
 function $(id){return document.getElementById(id)}
@@ -279,7 +277,6 @@ $('ghVerify').onclick=function(){
 };
 
 function randHex(bytes){var a=new Uint8Array(bytes);crypto.getRandomValues(a);var s='';for(var i=0;i<a.length;i++)s+=a[i].toString(16).padStart(2,'0');return s;}
-function randPass(){var a=new Uint8Array(18);crypto.getRandomValues(a);return btoa(String.fromCharCode.apply(null,a)).replace(/\\+/g,'-').replace(/\\//g,'_').replace(/=+$/,'');}
 
 var STEPS_NEW=[
  {id:'res',fa:'ساخت دیتابیس KV و D1',en:'Create KV and D1 databases'},
@@ -322,7 +319,7 @@ function install(){
   $('progressCard').scrollIntoView({behavior:'smooth',block:'start'});
   var cf=$('cfToken').value.trim(),gh=$('ghToken').value.trim(),name=$('workerName').value.trim();
   var useGh=!$('skipGh').checked;
-  var creds=S.res||{adminPassword:randPass(),runnerSecret:randHex(32)};
+  var creds=S.res||{runnerSecret:randHex(32)};
   S.res=creds;
   var state={};renderLog(state);
   var acct=S.cf.accountId,kv,d1,url='',repo='',branch='main',warn=[];
@@ -345,7 +342,7 @@ function install(){
     kv=r.kvId;d1=r.d1Id;mark('res','done');if(r.workerExists&&!S.connect)$('existsBox').classList.remove('hidden');
     var step=S.connect?'attach':'deploy';
     mark(step,'run');
-    return api('cloudflare/'+step,{token:cf,accountId:acct,workerName:name,kvId:kv,d1Id:d1,adminPassword:creds.adminPassword,runnerSecret:creds.runnerSecret}).then(function(x){x.__step=step;return x;});
+    return api('cloudflare/'+step,{token:cf,accountId:acct,workerName:name,kvId:kv,d1Id:d1,runnerSecret:creds.runnerSecret}).then(function(x){x.__step=step;return x;});
   }).then(function(r){
     if(!r.ok){fail(r.__step||'deploy',state,r);throw 0;}
     mark(r.__step||'deploy','done');mark('fin','run');
@@ -382,10 +379,11 @@ function install(){
       $('rActions').href=r.actionsUrl;$('rActions').classList.remove('hidden');
     }
     $('bar').style.width='100%';
-    $('rUrl').textContent=url;$('rAdmin').textContent=url+'/admin';$('rPass').textContent=creds.adminPassword;
+    $('rUrl').textContent=url;
     $('rRepoRow').classList.toggle('hidden',!useGh);$('rRepo').textContent=repo;
     $('rOpen').href=url;
-    if(warn.length){$('rWarn').textContent='⚠️ '+warn.join(' ');$('rWarn').classList.remove('hidden');}
+    warn.unshift(T[lang].doneWarn);
+    $('rWarn').textContent='⚠️ '+warn.join(' ');$('rWarn').classList.remove('hidden');
     $('progressCard').classList.add('hidden');$('resultCard').classList.remove('hidden');
     $('resultCard').scrollIntoView({behavior:'smooth',block:'start'});
     S.installing=false;refresh();
@@ -396,10 +394,6 @@ $('install').onclick=install;$('retry').onclick=install;
 var cps=document.querySelectorAll('[data-copy]');
 for(var c=0;c<cps.length;c++){cps[c].onclick=function(){var t=$(this.getAttribute('data-copy')).textContent;var b=this;
   (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){var o=b.textContent;b.textContent='✓';setTimeout(function(){b.textContent=o},1200)}).catch(function(){});};}
-$('dlCreds').onclick=function(){
-  var txt='Arizo Self\\n\\nPanel: '+$('rUrl').textContent+'\\nAdmin: '+$('rAdmin').textContent+'\\nPassword: '+$('rPass').textContent+($('rRepo').textContent?'\\nRepository: '+$('rRepo').textContent:'')+'\\n';
-  var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([txt],{type:'text/plain'}));a.download='arizo-self-credentials.txt';document.body.appendChild(a);a.click();a.remove();
-};
 refresh();
 })();
 </script>
