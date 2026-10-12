@@ -228,7 +228,7 @@ function applyMode(){
   applyLang();refresh();
 }
 if(S.connect)applyMode();
-api('status',{}).then(function(d){if(d&&d.ok&&d.configured===false&&!S.connect){S.connect=true;applyMode();}});
+api('status',{}).then(function(d){if(d&&d.ok&&d.connect&&!S.connect){S.connect=true;applyMode();}});
 
 function setStatus(id,cls,msg){var el=$(id);el.className='status '+cls;el.textContent=msg;}
 function msgOf(d){return (lang==='en'?d.en:d.fa)||d.en||'Error';}
@@ -338,7 +338,9 @@ function install(){
     mark('locate','run');
     first=api('cloudflare/locate',{token:cf,workerName:name}).then(function(r){
       if(!r.ok){fail('locate',state,r);throw 0;}
-      acct=r.accountId;mark('locate','done');mark('res','run');
+      acct=r.accountId;mark('locate','done');
+      if(r.kvId&&r.d1Id){mark('res','done');return {ok:true,kvId:r.kvId,d1Id:r.d1Id,workerExists:true};}
+      mark('res','run');
       return api('cloudflare/resources',{token:cf,accountId:acct,workerName:name});
     });
   }else{
