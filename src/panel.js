@@ -4331,6 +4331,10 @@ export function panelHTML(env, options = {}) {
       <!-- فرم ثبت‌نام کاربران با کد لایسنس -->
       <div id="registerFormBox" class="hidden">
         <div id="firstAdminNotice" class="hidden" style="background: linear-gradient(135deg, rgba(245,158,11,.16), rgba(99,102,241,.14)); border: 1px solid rgba(245,158,11,.5); border-radius: var(--radius-md); padding: 14px; margin-bottom: 14px; line-height: 1.8; font-size: 0.9rem;"></div>
+        <div class="form-group hidden" id="setupCodeGroup" style="background: var(--accent-purple-bg); border: 1px dashed var(--accent-purple-border); border-radius: var(--radius-md); padding: 14px;">
+          <label class="form-label" style="color: var(--accent-purple);" for="regSetupCode">🔑 <span id="setupCodeLabel">کد راه‌اندازی</span></label>
+          <input type="text" id="regSetupCode" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="setup code" style="font-size:1.05rem; letter-spacing:1px;">
+        </div>
         <div class="form-group" id="licenseGroup" style="background: var(--accent-purple-bg); border: 1px dashed var(--accent-purple-border); border-radius: var(--radius-md); padding: 14px;">
           <label class="form-label" style="color: var(--accent-purple);">
             <span data-i18n="authLicenseLabel">🎟️ کد لایسنس / ردیم‌کد فعال‌سازی</span>
@@ -8165,11 +8169,34 @@ export function panelHTML(env, options = {}) {
         var d = await r.json();
         var box = document.getElementById('firstAdminNotice');
         var lic = document.getElementById('licenseGroup');
+        var grp = document.getElementById('setupCodeGroup');
         if (!d || !d.firstAdmin || !box) return;
         var en = window.currentLang === 'en';
-        box.innerHTML = en
-          ? '👑 <b>This site has no accounts yet.</b> The first account you create here becomes the <b>owner</b> with a lifetime plan and access to the management panel. No license code is needed.'
-          : '👑 <b>این سایت هنوز هیچ حسابی ندارد.</b> اولین حسابی که اینجا بسازید، <b>مدیر کل</b> می‌شود، اشتراک دائمی می‌گیرد و به پنل مدیریت هم دسترسی دارد. نیازی به کد لایسنس نیست.';
+
+        var fromLink = '';
+        var m = /(?:^|[#&])setup=([A-Za-z0-9_-]{16,128})/.exec(window.location.hash || '');
+        if (m) {
+          fromLink = m[1];
+          try { window.history.replaceState({}, document.title, window.location.pathname + window.location.search); } catch (_) {}
+        }
+        var codeInput = document.getElementById('regSetupCode');
+        if (fromLink && codeInput) codeInput.value = fromLink;
+
+        var msg;
+        if (d.needsCode) {
+          msg = en
+            ? '👑 <b>This site has no accounts yet.</b> Only the person holding the <b>setup code</b> can create the first account, which becomes the <b>owner</b> with a lifetime plan and access to the management panel.'
+            : '👑 <b>این سایت هنوز هیچ حسابی ندارد.</b> فقط کسی که <b>کد راه‌اندازی</b> را دارد می‌تواند اولین حساب را بسازد؛ این حساب <b>مدیر کل</b> می‌شود، اشتراک دائمی می‌گیرد و به پنل مدیریت هم دسترسی دارد.';
+          if (grp) {
+            document.getElementById('setupCodeLabel').textContent = en ? 'Setup code' : 'کد راه‌اندازی';
+            grp.classList.toggle('hidden', !!fromLink);
+          }
+        } else {
+          msg = en
+            ? '👑 <b>This site has no accounts yet.</b> The first account you create here becomes the <b>owner</b> with a lifetime plan and access to the management panel. No license code is needed.'
+            : '👑 <b>این سایت هنوز هیچ حسابی ندارد.</b> اولین حسابی که اینجا بسازید، <b>مدیر کل</b> می‌شود، اشتراک دائمی می‌گیرد و به پنل مدیریت هم دسترسی دارد. نیازی به کد لایسنس نیست.';
+        }
+        box.innerHTML = msg;
         box.classList.remove('hidden');
         if (lic) lic.classList.add('hidden');
         switchUserTab('register');
@@ -8576,7 +8603,7 @@ export function panelHTML(env, options = {}) {
         var res = await fetch('/api/user/register', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: uname, password: pass, licenseCode: code })
+          body: JSON.stringify({ username: uname, password: pass, licenseCode: code, setupCode: ((document.getElementById('regSetupCode') || {}).value || '').trim() })
         });
         var data = await res.json();
         if (data.ok && data.token) {
