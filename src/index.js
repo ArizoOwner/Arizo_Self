@@ -113,7 +113,7 @@ function getUnifiedStorage(env) {
       }
 
       // 2. در صورت عدم وجود در D1، خواندن از KV
-      const rawKv = env.KV_RAW || env.KV;
+      const rawKv = env._storageInit ? env.KV_RAW : env.KV;
       if (rawKv && typeof rawKv.get === 'function') {
         try {
           const val = await rawKv.get(key, type);
@@ -192,7 +192,7 @@ function getUnifiedStorage(env) {
       // 2. آینه‌سازی هوشمند در KV (حفاظت سخت‌گیرانه از سهمیه ۱۰۰۰ رایت روزانه KV)
       // داده‌های موقت/پراستفاده (مانند هانی‌پات، استیت بات، کش دیالوگ‌ها، سشن‌های موقت و پینگ رانر) فقط در D1 و RAM نگهداری می‌شوند
       const isTransientKey = key.startsWith('bot_') || key.startsWith('temp_') || key.startsWith('audit_') || key.startsWith('security_') || key.startsWith('rate_') || key === 'security_audit_log' || key.startsWith('user_dialogs:') || key.startsWith('runner:');
-      const rawKv = env.KV_RAW || env.KV;
+      const rawKv = env._storageInit ? env.KV_RAW : env.KV;
       if (!isTransientKey && rawKv && typeof rawKv.put === 'function') {
         try {
           await rawKv.put(key, valStr, options);
@@ -221,7 +221,7 @@ function getUnifiedStorage(env) {
           await env.DB.prepare('DELETE FROM kv_store WHERE key = ?').bind(key).run();
         } catch (_) {}
       }
-      const rawKv = env.KV_RAW || env.KV;
+      const rawKv = env._storageInit ? env.KV_RAW : env.KV;
       if (rawKv && typeof rawKv.delete === 'function') {
         try {
           await rawKv.delete(key);
@@ -239,7 +239,7 @@ function getUnifiedStorage(env) {
           }
         } catch (_) {}
       }
-      const rawKv = env.KV_RAW || env.KV;
+      const rawKv = env._storageInit ? env.KV_RAW : env.KV;
       if (rawKv && typeof rawKv.list === 'function') {
         return await rawKv.list(options);
       }
@@ -262,14 +262,16 @@ function isSetupRequired(env) {
   return !env._hasBindings;
 }
 
-// Worker دارای D1 که ویزارد را کامل نکرده (setup:complete ندارد) و هنوز کاربری هم ندارد → پنل نباید باز شود
+// پنل فقط وقتی باز می‌شود که ویزارد تمام شده باشد (setup:complete در D1) یا کاربری از قبل وجود داشته باشد (نصب‌های قدیمی).
+// هر حالت میانه (فقط KV، فقط D1، یا هر دو بدون پایان ویزارد) به /setup می‌رود.
 async function isWizardIncomplete(env) {
   if (env._setupDone) return false;
-  if (!env.DB) { env._setupDone = true; return false; }
-  try {
-    const row = await env.DB.prepare("SELECT 1 AS x FROM kv_store WHERE key = 'setup:complete'").first();
-    if (row) { env._setupDone = true; return false; }
-  } catch (_) {}
+  if (env.DB) {
+    try {
+      const row = await env.DB.prepare("SELECT 1 AS x FROM kv_store WHERE key = 'setup:complete'").first();
+      if (row) { env._setupDone = true; return false; }
+    } catch (_) {}
+  }
   try {
     const users = await env.KV.get('users_list', 'json');
     if (Array.isArray(users) && users.length > 0) { env._setupDone = true; return false; }
@@ -285,11 +287,10 @@ export function resetStorageCachesForTests() {
 }
 
 function initEnvStorage(env) {
-  if (!env || isSetupRequired(env)) return;
-  if (!env.KV_RAW) {
-    env.KV_RAW = env.KV;
-    env.KV = getUnifiedStorage(env);
-  }
+  if (!env || isSetupRequired(env) || env._storageInit) return;
+  env._storageInit = true;
+  env.KV_RAW = env.KV || null;
+  env.KV = getUnifiedStorage(env);
 }
 
 const memoryRateLimits = new Map();
