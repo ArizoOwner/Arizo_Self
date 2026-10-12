@@ -24,10 +24,15 @@
 
 <br><br>
 
-> [!TIP]
+<div dir="rtl">
+
+> **💡 نکته**
+>
 > **🚀 ویزارد راه‌اندازی سریع و هوشمند تحت وب (Online Setup Wizard):**  
 > برای راه‌اندازی و کانفیگ آسان بدون نیاز به دستورات پیچیده، مستقیماً وارد **[ویزارد راه‌اندازی ابری Arizo Self](https://arizo-self.arizosupport.workers.dev/setup)** شوید:  
 > **🔗 لینک مستقیم: [https://arizo-self.arizosupport.workers.dev/setup](https://arizo-self.arizosupport.workers.dev/setup)** (همچنین در دسترس روی مسیر `/wizard`)
+
+</div>
 
 <br>
 
@@ -59,6 +64,8 @@
 ### 「 ✦ ۱۹ قابلیت برتر سامانه (Core Capabilities) ✦ 」
 
 </div>
+
+<div dir="rtl">
 
 <table>
 <tr>
@@ -303,6 +310,8 @@
 </tr>
 </table>
 
+</div>
+
 ---
 
 <div align="center">
@@ -310,6 +319,8 @@
 ### 「 ✦ جدول دستورات درون‌برنامه‌ای تلگرام (Telegram Commands Cheatsheet) ✦ 」
 
 </div>
+
+<div dir="rtl">
 
 > این دستورات مستقیماً در گفتگوهای تلگرام و بدون نیاز به ورود به پنل وب قابل استفاده هستند:
 
@@ -328,6 +339,8 @@
 | `/start` | در ربات دستیار شخصی | باز کردن منوی شیشه‌ای و دسترسی به مینی‌اپلیکیشن پنل |
 | `/test` | در ربات دستیار شخصی | ارسال پیام آزمایشی جهت اعتبارسنجی ارسال گزارش و رسانه |
 | `/status` | در ربات دستیار شخصی | استعلام زنده وضعیت اتصال سلف‌بات، حافظه و سلامت سیستم |
+
+</div>
 
 ---
 
@@ -404,6 +417,8 @@ graph TD
 
 </div>
 
+<div dir="rtl">
+
 <table>
 <tr>
 <td width="25%" align="center">
@@ -429,6 +444,8 @@ graph TD
 </tr>
 </table>
 
+</div>
+
 ---
 
 <div align="center">
@@ -437,7 +454,10 @@ graph TD
 
 </div>
 
-> [!TIP]
+<div dir="rtl">
+
+> **💡 نکته**
+>
 > ### 🧙‍♂️ ویزارد گرافیکی و هوشمند راه‌اندازی (Interactive Web Setup Wizard)
 > **سریع‌ترین و بی‌دردسرترین روش برای راه‌اندازی و کانفیگ کامل Arizo Self:**  
 > 🔗 **لینک ورود مستقیم:** **[https://arizo-self.arizosupport.workers.dev/setup](https://arizo-self.arizosupport.workers.dev/setup)**  
@@ -490,6 +510,8 @@ pm2 start scripts/github-runner.js --name arizo-self-engine
 pm2 save && pm2 startup
 ```
 
+</div>
+
 ---
 
 <div align="center">
@@ -502,6 +524,10 @@ pm2 save && pm2 startup
 
 <br><br>
 
+</div>
+
+<div dir="rtl">
+
 | لایه | تکنولوژی | نقش و کاربرد در سامانه |
 |:---:|:---|:---|
 | 🌐 | **Cloudflare Workers** | پردازش لبه، مینی‌اپلیکیشن تلگرام، وب‌هوک و امنیت هانی‌پات |
@@ -511,6 +537,10 @@ pm2 save && pm2 startup
 | 🔐 | **Google Authenticator (TOTP)** | تایید هویت دومرحله‌ای سازگار با استاندارد جهانی RFC 6238 |
 | 🤖 | **Telegram Bot API** | دریافت گزارش‌های ضد حذف، ضد ویرایش و مدیریت تلگرامی |
 | 🎨 | **Vanilla CSS + Glassmorphism** | رابط کاربری لوکس شیشه‌ای با واکنش‌گرایی کامل موبایل و وب |
+
+</div>
+
+<div align="center">
 
 <br>
 
