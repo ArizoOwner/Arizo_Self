@@ -314,7 +314,8 @@ export async function cfFinalize(tokenRaw, accountId, { workerName, d1Id }) {
   await cfCall(token, `/accounts/${accountId}/workers/scripts/${workerName}/schedules`, { method: 'PUT', body: [{ cron: '* * * * *' }] });
   await cfCall(token, `/accounts/${accountId}/workers/scripts/${workerName}/subdomain`, { method: 'POST', body: { enabled: true, previews_enabled: false } });
   if (d1Id) {
-    await cfCall(token, `/accounts/${accountId}/d1/database/${d1Id}/query`, { method: 'POST', body: { sql: D1_SCHEMA } });
+    const marker = `INSERT OR REPLACE INTO kv_store (key, value, expires_at, updated_at) VALUES ('setup:complete', '1', NULL, ${Date.now()});`;
+    await cfCall(token, `/accounts/${accountId}/d1/database/${d1Id}/query`, { method: 'POST', body: { sql: D1_SCHEMA + '\n' + marker } });
   }
   const sub = await cfCall(token, `/accounts/${accountId}/workers/subdomain`);
   if (!sub || !sub.subdomain) {
