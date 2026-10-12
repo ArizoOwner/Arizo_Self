@@ -37,7 +37,7 @@ jobs:
       - name: 🚀 Run Clock Engine
         env:
           CLOUDFLARE_URL: ${{ secrets.CLOUDFLARE_URL }}
-          RUNNER_SECRET: ${{ secrets.RUNNER_SECRET || secrets.ADMIN_PASSWORD }}
+          RUNNER_SECRET: ${{ secrets.RUNNER_SECRET }}
           API_ID: ${{ secrets.API_ID || '2040' }}
           API_HASH: ${{ secrets.API_HASH || 'b18441a1ff607e10a989891a5462e627' }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
