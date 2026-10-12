@@ -8,12 +8,13 @@
     "test": "node tests/test-runner.js",
     "dev": "npx wrangler dev",
     "deploy": "npx wrangler deploy",
-    "tail": "npx wrangler tail",
-    "readme-art": "node scripts/gen-readme-art.mjs"
+    "tail": "npx wrangler tail"
   },
   "dependencies": {
+    "blakejs": "^1.2.1",
     "qrcode": "^1.5.4",
-    "telegram": "^2.26.22"
+    "telegram": "^2.26.22",
+    "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
     "wrangler": "^4.0.0"
