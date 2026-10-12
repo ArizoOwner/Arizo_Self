@@ -6,4 +6,7 @@ kv_backup.json
 temp_user_*.json
 .env
 .env.*
+scratch/
+.idea/
+.vscode/
 
