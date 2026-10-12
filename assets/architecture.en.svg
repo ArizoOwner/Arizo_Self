@@ -84,7 +84,7 @@
   <circle r="5" fill="#26a5e4" filter="url(#glow)">
     <animateMotion dur="1.6s" begin="0.1s" repeatCount="indefinite" path="M 615 226 L 725 226"/>
   </circle>
-  <text x="670" y="218" class="lbl" text-anchor="middle"><40ms</text>
+  <text x="670" y="218" class="lbl" text-anchor="middle">&lt;40ms</text>
   <path id="f7" d="M 615 314 C 655 314, 685 132, 725 132" fill="none" stroke="#38bdf8" stroke-opacity=".28" stroke-width="2"/>
   <path d="M 615 314 C 655 314, 685 132, 725 132" fill="none" stroke="#38bdf8" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="6 12">
     <animate attributeName="stroke-dashoffset" values="18;0" dur="1.1s" repeatCount="indefinite"/>
