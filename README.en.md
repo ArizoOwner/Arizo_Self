@@ -27,9 +27,9 @@
 <br><br>
 
 > [!TIP]
-> **🚀 Online Interactive Setup Wizard:**  
-> For easy, zero-command setup and automated configuration, launch the official **[Arizo Self Cloud Setup Wizard](https://arizo-self.arizosupport.workers.dev/setup)**:  
-> **🔗 Direct Link: [https://arizo-self.arizosupport.workers.dev/setup](https://arizo-self.arizosupport.workers.dev/setup)** (also accessible at `/wizard`)
+> **🚀 Fully automated install with a graphical wizard:**  
+> Just deploy `worker.js` to Cloudflare and open the site; the wizard appears by itself and sets up the databases, secrets, cron and the GitHub runner. No terminal, no `wrangler`.  
+> **🔗 Official wizard: [https://arizo-self.arizosupport.workers.dev/setup](https://arizo-self.arizosupport.workers.dev/setup)** (also at `/wizard`)
 
 <br>
 
@@ -296,10 +296,10 @@
 <td width="50%">
 
 ### 🧙 &nbsp; Setup Wizard
-> A guided web wizard at `/setup` that walks you from zero to a running panel.
+> A graphical wizard at `/setup` that takes a bare Worker to a fully running panel with just two tokens.
 
-- 🌐 Live at [`/setup`](https://arizo-self.arizosupport.workers.dev/setup) (alias `/wizard`)
-- 🇮🇷 / 🇬🇧 bilingual, light & dark themes
+- 🔗 A deployed-but-unconfigured Worker redirects to the wizard automatically
+- 🌐 Official copy at [`/setup`](https://arizo-self.arizosupport.workers.dev/setup) (alias `/wizard`)
 
 </td>
 </tr>
@@ -440,35 +440,36 @@ graph TD
 </div>
 
 > [!TIP]
-> ### 🧙‍♂️ Interactive Web Setup Wizard
-> **The fastest and easiest way to deploy and configure Arizo Self:**  
-> 🔗 **Launch Wizard:** **[https://arizo-self.arizosupport.workers.dev/setup](https://arizo-self.arizosupport.workers.dev/setup)**  
-> 
-> The intelligent 5-step wizard includes:
-> - 📄 **Automated `wrangler.toml` generator** with your verified account values and bindings
-> - 🤖 **Real-time Telegram Bot Token validator and ping tester**
-> - 🗄️ **Live Cloudflare D1 database and KV namespace health diagnostics**
-> - ✅ **Pre-flight readiness checklist** guaranteeing smooth deployment
+> ### 🧙‍♂️ Graphical Setup Wizard (no terminal)
+> **The easiest way: download, upload, open the site.** The wizard does the rest.
 
-#### ☁️ &nbsp; Option 1: Free Deployment on Cloudflare Workers + GitHub Actions (Recommended)
+#### ☁️ &nbsp; Option 1: Automated install on Cloudflare Workers + GitHub Actions (Recommended)
 
-1. Fork or clone the repository:
+1. Download `worker.js` from the [latest release](https://github.com/ArizoOwner/Arizo_Self/releases/latest/download/worker.js).
+2. In the [Cloudflare dashboard](https://dash.cloudflare.com) go to **Workers & Pages → Create → Create Worker**, pick a name and Deploy; then open **Edit code**, replace the content with the downloaded file and Deploy again.
+3. Open your Worker URL (`https://<name>.<subdomain>.workers.dev`). Since it is not configured yet, the **graphical wizard** shows up automatically.
+4. Create the two tokens as the page guides you (the create-token button pre-selects the required permissions):
+   - **Cloudflare:** Workers Scripts, KV Storage and D1 (edit) plus Account Settings (read)
+   - **GitHub:** `repo` and `workflow` scopes (for the 24/7 runner; optional)
+5. Click **"Connect and set up"**. The wizard will, in order:
+   - find your Worker in the account, create KV and D1 and attach them to that very Worker;
+   - generate the admin and runner passwords in your browser and store them as Secrets;
+   - set the per-minute cron, the workers.dev domain and the database tables;
+   - fork the project, store the runner secrets with encryption and start the runner.
+6. At the end the panel URL and admin password are shown; save them right away (the password cannot be displayed again).
+
+> [!NOTE]
+> Tokens are used only on that page and are never stored. Every step is repeatable; on error just press "Retry". Once set up, `/` serves the panel.
+
+#### 🛠️ &nbsp; Option 2: Manual install with a terminal (for developers)
+
+1. Clone the repository:
    ```bash
    git clone https://github.com/ArizoOwner/Arizo_Self.git
    cd Arizo_Self
    ```
-
-2. Deploy the Worker to Cloudflare:
-   ```bash
-   npx wrangler deploy
-   ```
-
-3. Configure secrets under **Settings → Secrets and variables → Actions** in your GitHub repository:
-   - `CLOUDFLARE_URL`: Your deployed Worker URL (e.g. `https://your-worker.workers.dev`)
-   - `RUNNER_SECRET`: Shared authentication key between the runner and panel
-   - `GITHUB_TOKEN`: Built-in GitHub workflow token enabling continuous 24/7 runner persistence
-
-4. Under the **Actions** tab in GitHub, enable and trigger the `⚡ Telegram Clock Engine` workflow.
+2. Put your own KV and D1 ids in `wrangler.toml`, then run `npx wrangler secret put ADMIN_PASSWORD` and `npx wrangler secret put RUNNER_SECRET`.
+3. Run `npx wrangler deploy`, create the GitHub repository secrets `CLOUDFLARE_URL` and `RUNNER_SECRET`, and enable the `⚡ Telegram Clock Engine` workflow under **Actions**.
 
 #### 🤖 &nbsp; Helper Bot & Logger Activation
 
@@ -477,7 +478,7 @@ graph TD
 3. In Arizo Studio, navigate to **"⚡ Bot & Logger"**, paste the token, and click **Connect & Enable Webhook**.
 4. Open your bot on Telegram and send `/start` to activate the Mini App and logging bridge.
 
-#### 💻 &nbsp; Option 2: Continuous Execution on a VPS with PM2
+#### 💻 &nbsp; Option 3: Continuous Execution on a VPS with PM2
 
 ```bash
 # 1. Install production dependencies
