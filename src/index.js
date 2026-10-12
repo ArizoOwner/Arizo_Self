@@ -18,6 +18,7 @@ import { isHoneypot } from './security/rateLimiter.js';
 import { logSecurityEvent, getRecentSecurityEvents, AUDIT_EVENT_TYPES, AUDIT_SEVERITY } from './security/auditLogger.js';
 import { generateTotpSecret, generateTotpCode, verifyTotpToken, generateBackupCodes, getTotpAuthUri } from './security/totp.js';
 import { BackupManager } from './modules/backupManager.js';
+import { sanitizeWatchAlerts } from './modules/watchAlerts.js';
 import QRCode from 'qrcode';
 
 // هدرهای امنیتی درجه سازمانی (Enterprise Security & CSP)
@@ -299,6 +300,20 @@ function checkRateLimit(env, key, maxHits, windowSec) {
   }
   entry.hits += 1;
   return { allowed: true, remaining: maxHits - entry.hits, reset: entry.reset };
+}
+
+/** نمای عمومی تنظیمات اعلان برای پنل: توکن ربات اعلان هرگز به مرورگر برنمی‌گردد */
+function publicWatchAlerts(telegram) {
+  const w = telegram?.watchAlerts;
+  if (!w) return { enabled: false, chatId: '', rules: [], hasBot: false };
+  return {
+    enabled: !!w.enabled,
+    chatId: w.chatId || '',
+    rules: Array.isArray(w.rules) ? w.rules : [],
+    hasBot: !!w.botToken,
+    botUsername: w.botUsername || '',
+    botName: w.botName || ''
+  };
 }
 
 async function getAuthUser(request, env) {
@@ -1625,6 +1640,7 @@ export default {
         aiMaxReplies: auth.user.telegram?.aiMaxReplies ?? 3,
         aiCooldown: auth.user.telegram?.aiCooldown ?? 5,
         aiIgnoredUsers: auth.user.telegram?.aiIgnoredUsers || [],
+        watchAlerts: publicWatchAlerts(auth.user.telegram),
         userId: auth.user.telegram?.userId || null,
         bot: auth.user.telegram?.bot || null,
         totpEnabled: !!auth.user.totp?.enabled,
@@ -2262,6 +2278,10 @@ export default {
           }
           auth.user.telegram.aiIgnoredUsers = rawIgnore.map(x => String(x).trim()).filter(Boolean).slice(0, 100);
         }
+        // 🔔 اعلان پیام‌های چت‌های انتخاب‌شده در ربات جداگانه (Watch Alerts)
+        if (b.watchAlerts !== undefined && typeof b.watchAlerts === 'object' && b.watchAlerts !== null) {
+          auth.user.telegram.watchAlerts = sanitizeWatchAlerts(b.watchAlerts, auth.user.telegram.watchAlerts);
+        }
         if (b.bot !== undefined && typeof b.bot === 'object' && b.bot !== null) {
           if (!auth.user.telegram.bot) auth.user.telegram.bot = {};
           const rawToken = b.bot.token !== undefined ? String(b.bot.token).trim() : null;
@@ -2423,6 +2443,7 @@ export default {
             aiMaxReplies: u.telegram.aiMaxReplies ?? 3,
             aiCooldown: u.telegram.aiCooldown ?? 5,
             aiIgnoredUsers: u.telegram.aiIgnoredUsers || [],
+            watchAlerts: u.telegram.watchAlerts || null,
             bot: u.telegram.bot || null
           });
         }
@@ -2531,10 +2552,14 @@ export default {
         return json({ error: 'unauthorized runner' }, 401);
       }
       try {
-        const { username, ghostMode, aiReplyEnabled, aiIgnoredUsers, aiModel } = await request.json();
+        const { username, ghostMode, aiReplyEnabled, aiIgnoredUsers, aiModel, watchAlerts } = await request.json();
         if (username) {
           const u = await env.KV.get('user:' + username, 'json');
           if (u && u.telegram) {
+            // فقط قوانین از رانر پذیرفته می‌شود (توکن و ربات هرگز از این مسیر تغییر نمی‌کنند)
+            if (watchAlerts && Array.isArray(watchAlerts.rules)) {
+              u.telegram.watchAlerts = sanitizeWatchAlerts({ rules: watchAlerts.rules }, u.telegram.watchAlerts);
+            }
             if (ghostMode !== undefined) u.telegram.ghostMode = !!ghostMode;
             if (aiReplyEnabled !== undefined) u.telegram.aiReplyEnabled = !!aiReplyEnabled;
             if (aiIgnoredUsers !== undefined) u.telegram.aiIgnoredUsers = Array.isArray(aiIgnoredUsers) ? aiIgnoredUsers : [];
@@ -2761,6 +2786,114 @@ export default {
         });
       } catch (err) {
         return json({ error: err.message || 'خطا در قطع اتصال ربات' }, 500);
+      }
+    }
+
+    // ۴.۱.۱ اتصال ربات اعلان جداگانه (Watch Alerts) — اعتبارسنجی توکن و جلوگیری از استفاده مجدد ربات اصلی
+    if (url.pathname === '/api/telegram/watch-bot/connect' && request.method === 'POST') {
+      const auth = await getAuthUser(request, env);
+      if (!auth) return json({ error: 'ابتدا وارد حساب کاربری خود شوید' }, 401);
+
+      try {
+        const { token } = await request.json();
+        const cleanToken = String(token || '').trim();
+        if (!/^\d+:[A-Za-z0-9_-]{20,}$/.test(cleanToken)) {
+          return json({ error: 'فرمت توکن ربات نامعتبر است. توکن را از BotFather@ دریافت کنید.' }, 400);
+        }
+        if (auth.user.telegram?.bot?.token === cleanToken) {
+          return json({ error: 'ربات اعلان باید از ربات دستیار اصلی شما جدا باشد. یک ربات جدید در BotFather@ بسازید.' }, 400);
+        }
+
+        const meRes = await fetch(`https://api.telegram.org/bot${cleanToken}/getMe`);
+        if (!meRes.ok) {
+          const errData = await meRes.json().catch(() => ({}));
+          return json({ error: `توکن توسط تلگرام پذیرفته نشد: ${errData.description || 'توکن نامعتبر است'}` }, 400);
+        }
+        const botUser = (await meRes.json()).result;
+        if (!botUser || !botUser.is_bot) {
+          return json({ error: 'اطلاعات دریافتی متعلق به یک ربات معتبر نیست.' }, 400);
+        }
+
+        // انحصاری بودن: ربات اعلان نباید ربات اصلی یا ربات اعلان کاربر دیگری باشد
+        const usersList = await env.KV.get('users_list', 'json') || [];
+        for (const un of usersList) {
+          if (un.toLowerCase() === auth.username.toLowerCase()) continue;
+          const otherU = await env.KV.get('user:' + un, 'json');
+          const ot = otherU?.telegram;
+          if (ot?.bot?.token === cleanToken || ot?.watchAlerts?.botToken === cleanToken ||
+              (ot?.bot?.id && String(ot.bot.id) === String(botUser.id)) ||
+              (ot?.watchAlerts?.botId && String(ot.watchAlerts.botId) === String(botUser.id))) {
+            return json({ error: `این ربات (@${botUser.username}) قبلاً توسط حساب دیگری ثبت شده است. ربات اختصاصی خود را بسازید.` }, 400);
+          }
+        }
+
+        // ربات اعلان فقط برای ارسال استفاده می‌شود؛ وب‌هوک احتمالی قبلی را پاک می‌کنیم
+        await fetch(`https://api.telegram.org/bot${cleanToken}/deleteWebhook`).catch(() => {});
+
+        if (!auth.user.telegram) auth.user.telegram = {};
+        const prev = auth.user.telegram.watchAlerts || {};
+        auth.user.telegram.watchAlerts = {
+          ...prev,
+          enabled: prev.enabled ?? false,
+          rules: Array.isArray(prev.rules) ? prev.rules : [],
+          chatId: prev.chatId || String(auth.user.telegram.userId || ''),
+          botToken: cleanToken,
+          botUsername: botUser.username,
+          botName: botUser.first_name || botUser.username,
+          botId: String(botUser.id)
+        };
+        await env.KV.put('user:' + auth.username, JSON.stringify(auth.user));
+        activeUsersCache = null;
+        activeUsersCacheTime = 0;
+        return json({ ok: true, watchAlerts: publicWatchAlerts(auth.user.telegram) });
+      } catch (err) {
+        return json({ error: err.message || 'خطا در اتصال ربات اعلان' }, 500);
+      }
+    }
+
+    // ۴.۱.۲ قطع ربات اعلان
+    if (url.pathname === '/api/telegram/watch-bot/disconnect' && request.method === 'POST') {
+      const auth = await getAuthUser(request, env);
+      if (!auth) return json({ error: 'ابتدا وارد حساب کاربری خود شوید' }, 401);
+      try {
+        if (auth.user.telegram) {
+          auth.user.telegram.watchAlerts = sanitizeWatchAlerts({ removeBot: true }, auth.user.telegram.watchAlerts);
+        }
+        await env.KV.put('user:' + auth.username, JSON.stringify(auth.user));
+        activeUsersCache = null;
+        activeUsersCacheTime = 0;
+        return json({ ok: true, watchAlerts: publicWatchAlerts(auth.user.telegram) });
+      } catch (err) {
+        return json({ error: err.message || 'خطا در قطع ربات اعلان' }, 500);
+      }
+    }
+
+    // ۴.۱.۳ ارسال پیام آزمایشی از ربات اعلان
+    if (url.pathname === '/api/telegram/watch-bot/test' && request.method === 'POST') {
+      const auth = await getAuthUser(request, env);
+      if (!auth) return json({ error: 'ابتدا وارد حساب کاربری خود شوید' }, 401);
+      try {
+        const w = auth.user.telegram?.watchAlerts;
+        if (!w?.botToken) return json({ error: 'ابتدا ربات اعلان را متصل کنید' }, 400);
+        if (!w.chatId) return json({ error: 'شناسه عددی تلگرام مقصد اعلان‌ها را وارد و ذخیره کنید' }, 400);
+        const res = await fetch(`https://api.telegram.org/bot${w.botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: w.chatId,
+            text: '✅ <b>ربات اعلان Arizo متصل است</b>\nاز این پس پیام‌های چت‌های انتخاب‌شده شما اینجا اعلان می‌شود.',
+            parse_mode: 'HTML'
+          })
+        });
+        if (!res.ok) {
+          const e = await res.json().catch(() => ({}));
+          const hint = /chat not found|bot can't initiate/i.test(e.description || '')
+            ? ' — ابتدا وارد ربات اعلان شوید و دکمه Start را بزنید.' : '';
+          return json({ error: `ارسال ناموفق: ${e.description || res.status}${hint}` }, 400);
+        }
+        return json({ ok: true });
+      } catch (err) {
+        return json({ error: err.message || 'خطا در ارسال پیام آزمایشی' }, 500);
       }
     }
 
