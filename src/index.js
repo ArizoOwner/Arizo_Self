@@ -19,6 +19,7 @@ import { logSecurityEvent, getRecentSecurityEvents, AUDIT_EVENT_TYPES, AUDIT_SEV
 import { generateTotpSecret, generateTotpCode, verifyTotpToken, generateBackupCodes, getTotpAuthUri } from './security/totp.js';
 import { BackupManager } from './modules/backupManager.js';
 import { sanitizeWatchAlerts } from './modules/watchAlerts.js';
+import { handleWizardApi } from './modules/wizardDeploy.js';
 import QRCode from 'qrcode';
 
 // هدرهای امنیتی درجه سازمانی (Enterprise Security & CSP)
@@ -504,7 +505,7 @@ export default {
         status: 403,
         headers: {
           ...SECURITY_HEADERS,
-          'X-Security-Policy': 'Security-Protection-Active',
+          'X-Security-Policy': 'Zero-Trust-Honeypot-Armed',
           'Retry-After': '86400'
         }
       });
@@ -599,7 +600,7 @@ export default {
 
     // 🚀 ویزارد تعاملی و گرافیکی ستاپ و راه‌اندازی شخصی (Self-Hosting Setup Wizard)
     if (url.pathname === '/setup' || url.pathname === '/wizard') {
-      const etag = '"arizo-wiz-v3.6.2-placeholders"';
+      const etag = '"arizo-wiz-v4.0-auto"';
       if (etagMatches(request.headers.get('if-none-match'), etag)) {
         return new Response(null, {
           status: 304,
@@ -618,135 +619,23 @@ export default {
           'Content-Type': 'text/html;charset=utf-8',
           'ETag': etag,
           'Cache-Control': 'public, max-age=0, must-revalidate',
-          ...SECURITY_HEADERS
+          ...SECURITY_HEADERS,
+          'Content-Security-Policy': "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+          'Referrer-Policy': 'no-referrer'
         },
       });
     }
 
-    // بررسی زنده وضعیت و سلامت پیکربندی سیستم (System Health & Configuration Status)
-    if (url.pathname === '/api/setup/status' && request.method === 'GET') {
-      const isKvReady = !!(env.KV_RAW || env.KV);
-      const isD1Ready = !!env.DB;
-      let d1TableExists = false;
-      let d1RowCount = 0;
-      if (env.DB) {
-        try {
-          const check = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='kv_store'").first();
-          d1TableExists = !!check;
-          if (d1TableExists) {
-            const countRow = await env.DB.prepare("SELECT count(*) as cnt FROM kv_store").first();
-            d1RowCount = countRow ? Number(countRow.cnt || 0) : 0;
-          }
-        } catch (_) {}
+    // 🧙 API ویزارد نصب خودکار — بدون ذخیرهٔ توکن؛ محدودیت نرخ برای هر IP
+    if (url.pathname.startsWith('/api/setup/') && request.method === 'POST') {
+      const rl = await checkRateLimit(env, `rl:wiz:${clientIP}`, 60, 600);
+      if (!rl.allowed) {
+        return json({ ok: false, code: 'rate_limited', fa: 'درخواست‌های بیش از حد؛ چند دقیقه دیگر تلاش کنید.', en: 'Too many requests; try again in a few minutes.' }, 429, { 'Cache-Control': 'no-store' });
       }
-
-      return json({
-        success: true,
-        workerUrl: url.origin,
-        timestamp: Date.now(),
-        status: {
-          kvBound: isKvReady,
-          d1Bound: isD1Ready,
-          d1TableExists: d1TableExists,
-          d1RowCount: d1RowCount,
-          apiIdSet: !!env.API_ID,
-          apiHashSet: !!env.API_HASH,
-          adminPasswordSet: !!env.ADMIN_PASSWORD,
-          runnerSecretSet: !!env.RUNNER_SECRET,
-          cronsConfigured: true,
-          nodeCompat: true,
-          envName: env.ENVIRONMENT || 'production'
-        }
-      });
-    }
-
-    // مقداردهی و ساخت خودکار جداول دیتابیس D1 با یک کلیک (Initialize D1 Database)
-    if (url.pathname === '/api/setup/init-db' && request.method === 'POST') {
-      if (!env.DB) {
-        return json({
-          success: false,
-          error: 'پایگاه داده Cloudflare D1 به این ورکر متصل نیست (DB binding تعریف نشده). لطفاً ابتدا wrangler.toml را پیکربندی و دیپلوی کنید.'
-        }, 400);
-      }
-      try {
-        await env.DB.exec(`
-          CREATE TABLE IF NOT EXISTS kv_store (
-            key TEXT PRIMARY KEY,
-            value TEXT,
-            expires_at INTEGER,
-            updated_at INTEGER
-          );
-          CREATE INDEX IF NOT EXISTS idx_kv_expires ON kv_store(expires_at);
-        `);
-        return json({
-          success: true,
-          message: 'جداول پایگاه داده D1 (kv_store و اندیس‌ها) با موفقیت ساخته و آماده استفاده شدند.'
-        });
-      } catch (err) {
-        return json({ success: false, error: 'خطا در ساخت جداول D1: ' + err.message }, 500);
-      }
-    }
-
-    // تست و اعتبارسنجی آنلاین توکن ربات تلگرام (Telegram Bot Token Live Validator)
-    if (url.pathname === '/api/setup/test-bot' && request.method === 'POST') {
-      try {
-        const { token } = await request.json();
-        if (!token || typeof token !== 'string') {
-          return json({ success: false, error: 'توکن ربات ارسال نشده است.' }, 400);
-        }
-        const cleanToken = token.trim();
-        const tgRes = await fetch(`https://api.telegram.org/bot${encodeURIComponent(cleanToken)}/getMe`);
-        const tgData = await tgRes.json();
-        if (tgData && tgData.ok && tgData.result) {
-          return json({
-            success: true,
-            bot: {
-              id: tgData.result.id,
-              firstName: tgData.result.first_name,
-              username: tgData.result.username,
-              canJoinGroups: tgData.result.can_join_groups,
-              supportsInlineQueries: tgData.result.supports_inline_queries
-            }
-          });
-        } else {
-          return json({
-            success: false,
-            error: tgData.description || 'توکن وارد شده توسط سرورهای تلگرام تایید نشد.'
-          }, 400);
-        }
-      } catch (err) {
-        return json({ success: false, error: 'خطا در ارتباط با سرور تلگرام: ' + err.message }, 500);
-      }
-    }
-
-    // تست ارسال پیام توسط ربات تلگرام (Telegram Bot Test Message Ping)
-    if (url.pathname === '/api/setup/test-bot-message' && request.method === 'POST') {
-      try {
-        const { token, chatId } = await request.json();
-        if (!token || !chatId) {
-          return json({ success: false, error: 'توکن ربات و شناسه چت (عددی) الزامی هستند.' }, 400);
-        }
-        const cleanToken = String(token).trim();
-        const cleanChat = String(chatId).trim();
-        const msgText = '⚡ *Arizo Self Setup Wizard*\n\nربات کمکی شما با موفقیت به استودیوی ابری سلف‌بات متصل شد! 🎉\nاکنون می‌توانید از تمامی امکانات ضدحذف، لاگین و اعلانات امنیتی استفاده کنید.';
-        const tgRes = await fetch(`https://api.telegram.org/bot${encodeURIComponent(cleanToken)}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: cleanChat,
-            text: msgText,
-            parse_mode: 'Markdown'
-          })
-        });
-        const tgData = await tgRes.json();
-        if (tgData && tgData.ok) {
-          return json({ success: true, message: 'پیام تست با موفقیت به چت تلگرام ارسال شد.' });
-        } else {
-          return json({ success: false, error: tgData.description || 'خطا در ارسال پیام تلگرام.' }, 400);
-        }
-      } catch (err) {
-        return json({ success: false, error: 'خطا در ارتباط با تلگرام: ' + err.message }, 500);
-      }
+      const body = await request.json().catch(() => ({}));
+      const step = url.pathname.slice('/api/setup/'.length);
+      const out = await handleWizardApi(step, body);
+      return json(out.data, out.status, { 'Cache-Control': 'no-store' });
     }
 
     // ==========================================
