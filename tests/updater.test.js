@@ -385,7 +385,7 @@ describe('Updater — stored tokens & automatic updates', () => {
       const s = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json();
       assertEqual(s.connected, false);
       assertEqual(s.auto, false);
-      assertEqual(await env.KV.get('updater:creds'), null);
+      assert(!(await env.KV.get('updater:creds')), 'stored credentials must be empty after disconnect');
     } finally { net.restore(); }
   });
 
@@ -420,5 +420,23 @@ describe('Updater — no reinstall loop', () => {
       }
       assertEqual(net.calls.filter(c => c.method === 'PUT' && c.u.endsWith('/content')).length, 1);
     } finally { net.restore(); resetReleaseCache(); }
+  });
+});
+
+describe('Updater — disconnect is immediate', () => {
+  it('should read as disconnected right after disconnect even if KV keeps serving the old value', async () => {
+    const env = createEnv();
+    const token = await registerOwner(env, '198.51.100.97');
+    const net = mockNetwork();
+    try {
+      await worker.fetch(adminReq('/api/admin/update/connect', token, { method: 'POST', body: JSON.stringify({ cfToken: CF_TOKEN }) }), env);
+      const before = await env.KV.get('updater:creds');
+      assert(before && before.startsWith('v2:'));
+      await worker.fetch(adminReq('/api/admin/update/disconnect', token, { method: 'POST', body: '{}' }), env);
+      const s = await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json();
+      assertEqual(s.connected, false);
+      const a = await worker.fetch(adminReq('/api/admin/update/apply', token, { method: 'POST', body: '{}' }), env);
+      assertEqual((await a.json()).code, 'not_connected');
+    } finally { net.restore(); }
   });
 });
