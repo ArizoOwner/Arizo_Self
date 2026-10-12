@@ -507,3 +507,25 @@ describe('Setup Wizard — one-time setup code (first-owner protection)', () => 
     assert(!html.includes('?setup='));
   });
 });
+
+describe('Setup Wizard — step 3 wording on an already deployed Worker', () => {
+  it('should render the wizard in connect mode from the server, with no "install" wording', async () => {
+    const res = await worker.fetch(new Request('https://raw.workers.dev/setup'), {});
+    const html = await res.text();
+    assert(html.includes('connect:true'), 'raw worker must start in connect mode');
+    assert(html.includes("progressC:") && html.includes("doneC:") && html.includes("installC:'🚀 راه‌اندازی'"));
+    assert(!html.includes("installC:'☁️ نصب'"));
+  });
+
+  it('should render the full install wizard when the worker is already configured', async () => {
+    const res = await worker.fetch(new Request('https://arizo.test/setup'), createEnv());
+    const html = await res.text();
+    assert(html.includes('connect:false'));
+  });
+
+  it('should send different cache validators for the two modes so a stale page is never reused', async () => {
+    const raw = await worker.fetch(new Request('https://raw.workers.dev/setup'), {});
+    const full = await worker.fetch(new Request('https://arizo.test/setup'), createEnv());
+    assert(raw.headers.get('ETag') !== full.headers.get('ETag'));
+  });
+});
