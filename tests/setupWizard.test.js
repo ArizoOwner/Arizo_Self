@@ -339,7 +339,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
     for (const path of ['/', '/admin']) {
       const res = await worker.fetch(new Request('https://raw.workers.dev' + path), rawEnv());
       assertEqual(res.status, 302);
-      assertEqual(res.headers.get('Location'), '/setup');
+      assertEqual(res.headers.get('Location'), '/setup?required=1');
     }
   });
 
@@ -596,7 +596,7 @@ describe('Wizard — unfinished setup must not expose the panel', () => {
     for (const p of ['/', '/admin']) {
       const res = await get(envWith(), p);
       assertEqual(res.status, 302);
-      assertEqual(res.headers.get('Location'), '/setup');
+      assertEqual(res.headers.get('Location'), '/setup?required=1');
     }
   });
 
@@ -616,7 +616,7 @@ describe('Wizard — unfinished setup must not expose the panel', () => {
     delete env.SETUP_CODE;
     const res = await get(env, '/');
     assertEqual(res.status, 302);
-    assertEqual(res.headers.get('Location'), '/setup');
+    assertEqual(res.headers.get('Location'), '/setup?required=1');
   });
 
   it('should never trap a worker that has no D1 to hold the marker', async () => {
@@ -631,5 +631,45 @@ describe('Wizard — unfinished setup must not expose the panel', () => {
       const q = net.calls.find(c => c.u.endsWith('/d1/database/d1New/query'));
       assert(q && String(q.body).includes('setup:complete'));
     } finally { net.restore(); }
+  });
+});
+
+describe('Wizard — a fresh worker only ever shows /setup', () => {
+  it('should keep redirecting / and /admin on every repeated request to the same raw worker (shared env)', async () => {
+    const env = {};
+    for (let i = 0; i < 4; i++) {
+      for (const p of ['/', '/admin', '/admin/']) {
+        const res = await worker.fetch(new Request('https://raw.workers.dev' + p), env);
+        assertEqual(res.status, 302, p + ' request #' + (i + 1));
+        assertEqual(res.headers.get('Location'), '/setup?required=1');
+      }
+    }
+  });
+
+  it('should keep answering API routes with 503 setup_required on repeated requests to a raw worker', async () => {
+    const env = {};
+    for (let i = 0; i < 3; i++) {
+      const res = await worker.fetch(new Request('https://raw.workers.dev/api/user/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }), env);
+      assertEqual(res.status, 503);
+      assertEqual((await res.json()).error, 'setup_required');
+    }
+    assertEqual(env.KV, undefined);
+    assertEqual(env.KV_RAW, undefined);
+  });
+
+  it('should still serve the wizard page itself on repeated requests, and say why the user was sent there', async () => {
+    const env = {};
+    for (let i = 0; i < 3; i++) {
+      const res = await worker.fetch(new Request('https://raw.workers.dev/setup?required=1'), env);
+      assertEqual(res.status, 200);
+      const html = await res.text();
+      assert(html.includes('requiredBanner') && html.includes('reqText'));
+    }
+  });
+
+  it('should treat a worker with storage bindings as set up only once it is finished', async () => {
+    const env = createEnv();
+    assertEqual((await worker.fetch(new Request('https://arizo.test/'), env)).status, 200);
+    assertEqual((await worker.fetch(new Request('https://arizo.test/'), env)).status, 200);
   });
 });
