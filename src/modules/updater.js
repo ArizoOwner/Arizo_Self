@@ -6,6 +6,7 @@
  * - توکن‌ها فقط در حافظهٔ همان درخواست استفاده می‌شوند.
  */
 import { APP_VERSION, APP_BUILD, APP_CHANNEL } from '../version.js';
+import { encryptSession, decryptSession } from '../crypto.js';
 import {
   SOURCE_REPO, WORKFLOW_FILE, REPO_RE, WizardError,
   cfCall, ghCall, ghFail, requireToken, validateWorkerName,
@@ -140,4 +141,89 @@ export async function ghSyncRunner(tokenRaw, explicitRepo) {
     mergeType: (sync.data && sync.data.merge_type) || 'none',
     restarted: run.ok || run.status === 204
   };
+}
+
+// ---------------------------------------------------------------- به‌روزرسانی بدون وارد کردن مجدد توکن
+// توکن‌ها یک بار گرفته می‌شوند و با AES-GCM و کلید RUNNER_SECRET (سکرت Worker) رمز و ذخیره می‌شوند.
+const CREDS_KEY = 'updater:creds';
+const STATE_KEY = 'updater:state';
+const AUTO_INTERVAL = 6 * 3600 * 1000;
+
+export async function getUpdaterState(env) {
+  return (await env.KV.get(STATE_KEY, 'json')) || { auto: false };
+}
+
+export async function putUpdaterState(env, patch) {
+  const next = { ...(await getUpdaterState(env)), ...patch };
+  await env.KV.put(STATE_KEY, JSON.stringify(next));
+  return next;
+}
+
+export async function loadCreds(env) {
+  if (!env.RUNNER_SECRET) return null;
+  const raw = await env.KV.get(CREDS_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(await decryptSession(raw, env.RUNNER_SECRET)); } catch (_) { return null; }
+}
+
+export async function saveCreds(env, { cfToken, ghToken, repo, workerName }) {
+  if (!env.RUNNER_SECRET) {
+    throw new WizardError('no_secret', 'ابتدا RUNNER_SECRET روی Worker تنظیم شود تا توکن رمزنگاری و ذخیره شود.', 'RUNNER_SECRET must be set on the Worker before a token can be stored encrypted.', 409);
+  }
+  const cf = requireToken(cfToken, 'cf');
+  validateWorkerName(workerName);
+  await cfLocateWorker(cf, workerName);
+  const creds = { cfToken: cf, workerName };
+  if (ghToken) {
+    const gh = requireToken(ghToken, 'gh');
+    const me = await ghCall(gh, '/user');
+    if (!me.ok) throw ghFail(me, 'بررسی توکن GitHub ناموفق بود', 'GitHub token check failed');
+    creds.ghToken = gh;
+    if (repo) {
+      if (!REPO_RE.test(String(repo).trim())) throw new WizardError('bad_request', 'نام ریپو نامعتبر است.', 'Invalid repository name.');
+      creds.repo = String(repo).trim();
+    }
+  }
+  await env.KV.put(CREDS_KEY, await encryptSession(JSON.stringify(creds), env.RUNNER_SECRET));
+  await putUpdaterState(env, { connectedAt: Date.now() });
+  globalThis.__updNext = 0;
+}
+
+export async function clearCreds(env) {
+  await env.KV.delete(CREDS_KEY);
+  await putUpdaterState(env, { auto: false });
+}
+
+/** به‌روزرسانی با توکن‌های ذخیره‌شده: کد Worker + (در صورت وجود توکن GitHub) رانر */
+export async function runStoredUpdate(env, { force = false, source = 'manual' } = {}) {
+  const creds = await loadCreds(env);
+  if (!creds || !creds.cfToken) {
+    throw new WizardError('not_connected', 'به‌روزرسانی خودکار هنوز متصل نشده است؛ توکن Cloudflare را یک بار ثبت کنید.', 'Auto-update is not connected yet; save a Cloudflare token once.', 409);
+  }
+  const out = await applyCodeUpdate({ cfToken: creds.cfToken, workerName: creds.workerName, force });
+  let runner = null;
+  if (creds.ghToken) {
+    try { runner = await ghSyncRunner(creds.ghToken, creds.repo); } catch (e) { runner = { error: e.code || 'failed' }; }
+  }
+  await putUpdaterState(env, {
+    lastResult: { at: Date.now(), ok: true, source, version: out.latest.version, build: out.latest.build, runner: creds.ghToken ? (runner && !runner.error ? 'ok' : 'failed') : 'skipped' }
+  });
+  return { ...out, workerName: creds.workerName, runner };
+}
+
+/** هر دقیقه از کران صدا زده می‌شود؛ حداکثر هر ۶ ساعت GitHub را می‌بیند و در صورت نسخهٔ جدید به‌روز می‌کند */
+export async function autoUpdateTick(env) {
+  const now = Date.now();
+  if (globalThis.__updNext && now < globalThis.__updNext) return;
+  const st = await getUpdaterState(env);
+  if (!st.auto) { globalThis.__updNext = now + 600000; return; }
+  if (st.lastCheck && now - st.lastCheck < AUTO_INTERVAL) { globalThis.__updNext = st.lastCheck + AUTO_INTERVAL; return; }
+  globalThis.__updNext = now + AUTO_INTERVAL;
+  await putUpdaterState(env, { lastCheck: now });
+  try {
+    const latest = await fetchLatestRelease({ fresh: true });
+    if (latest.build > APP_BUILD) await runStoredUpdate(env, { source: 'auto' });
+  } catch (e) {
+    await putUpdaterState(env, { lastResult: { at: now, ok: false, source: 'auto', code: (e && e.code) || 'internal' } });
+  }
 }
