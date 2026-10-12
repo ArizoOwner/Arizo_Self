@@ -1,0 +1,27 @@
+# انتخاب دستی (برای توسعه‌دهندگان): این فایل را به wrangler.toml کپی کنید و شناسه‌های خودتان را بگذارید.
+# روش پیشنهادی نصب با ویزارد گرافیکی است و به این فایل نیازی ندارد.
+name = "arizo-self"
+main = "src/index.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["* * * * *"]
+
+[[kv_namespaces]]
+binding = "KV"
+id = "<YOUR_KV_NAMESPACE_ID>"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "arizo_db"
+database_id = "<YOUR_D1_DATABASE_ID>"
+
+# متغیرهای محیطی استاندارد (شناسه رسمی کلاینت تلگرام دسکتاپ)
+[vars]
+API_ID = "2040"
+API_HASH = "b18441a1ff607e10a989891a5462e627"
+
+# RUNNER_SECRET عمداً اینجا نیست: به‌صورت Secret ثبت می‌شود
+#   npx wrangler secret put RUNNER_SECRET
+# مدیر کل = اولین کاربری که در سایت ثبت‌نام می‌کند؛ رمز مدیر جداگانه‌ای وجود ندارد.
