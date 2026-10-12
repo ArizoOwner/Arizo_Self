@@ -899,7 +899,7 @@ export function setupWizardHTML(env = {}, url = {}) {
               <input type="text" id="cfgGhUser" class="input-text" placeholder="مثال: AmirHossein یا your-github-username" oninput="handleGhUserChange()">
             </div>
             <div style="display:flex; align-items:flex-end;">
-              <a href="https://github.com/ArizoOwner/arizo-telegram-self-manager/fork" target="_blank" class="btn-step next" style="padding:10px 16px; font-size:0.82rem; text-decoration:none;">
+              <a href="https://github.com/ArizoOwner/Arizo_Self/fork" target="_blank" class="btn-step next" style="padding:10px 16px; font-size:0.82rem; text-decoration:none;">
                 <span>🍴 فورک مستقیم در گیت‌هاب</span>
                 <span>↗️</span>
               </a>
@@ -919,7 +919,7 @@ export function setupWizardHTML(env = {}, url = {}) {
               سورس اصلی سلف‌بات روی گیت‌هاب قرار دارد. برای شروع روی دکمه زیر بزنید و در صفحه گیت‌هاب، دکمه <strong>Fork</strong> را بفشارید:
             </div>
             <div style="margin-top: 4px;">
-              <a href="https://github.com/ArizoOwner/arizo-telegram-self-manager" target="_blank" class="btn-tool primary" style="width:100%; justify-content:center;">
+              <a href="https://github.com/ArizoOwner/Arizo_Self" target="_blank" class="btn-tool primary" style="width:100%; justify-content:center;">
                 <span>🔗 مشاهده ریپوی مرجع گیت‌هاب</span>
               </a>
             </div>
@@ -955,7 +955,7 @@ export function setupWizardHTML(env = {}, url = {}) {
               <span class="code-box-lang" id="cmdLangBadge">POWERSHELL</span>
               <button class="btn-copy-code" onclick="copyCurrentCloneCmd()">📋 کپی کامل دستور</button>
             </div>
-            <code id="cloneCmdDisplay">git clone https://github.com/YOUR_USERNAME/arizo-telegram-self-manager.git; cd arizo-telegram-self-manager; npm install</code>
+            <code id="cloneCmdDisplay">git clone https://github.com/YOUR_USERNAME/Arizo_Self.git; cd Arizo_Self; npm install</code>
           </div>
         </div>
 
@@ -1534,20 +1534,20 @@ export function setupWizardHTML(env = {}, url = {}) {
       var secretsLink = document.getElementById('btnDirectSecretsLink');
       if (secretsLink) {
         if (user) {
-          secretsLink.href = 'https://github.com/' + encodeURIComponent(user) + '/arizo-telegram-self-manager/settings/secrets/actions/new';
+          secretsLink.href = 'https://github.com/' + encodeURIComponent(user) + '/Arizo_Self/settings/secrets/actions/new';
           secretsLink.style.display = 'inline-flex';
         } else {
-          secretsLink.href = 'https://github.com/ArizoOwner/arizo-telegram-self-manager/settings/secrets/actions/new';
+          secretsLink.href = 'https://github.com/ArizoOwner/Arizo_Self/settings/secrets/actions/new';
         }
       }
 
       var actionsLink = document.getElementById('btnDirectActionsLink');
       if (actionsLink) {
         if (user) {
-          actionsLink.href = 'https://github.com/' + encodeURIComponent(user) + '/arizo-telegram-self-manager/actions';
+          actionsLink.href = 'https://github.com/' + encodeURIComponent(user) + '/Arizo_Self/actions';
           actionsLink.style.display = 'inline-flex';
         } else {
-          actionsLink.href = 'https://github.com/ArizoOwner/arizo-telegram-self-manager/actions';
+          actionsLink.href = 'https://github.com/ArizoOwner/Arizo_Self/actions';
         }
       }
 
@@ -1604,14 +1604,14 @@ export function setupWizardHTML(env = {}, url = {}) {
 
     function updateCloneCmdText() {
       var user = (wizardState.ghUser || '').trim() || 'YOUR_USERNAME';
-      var repoUrl = 'https://github.com/' + user + '/arizo-telegram-self-manager.git';
+      var repoUrl = 'https://github.com/' + user + '/Arizo_Self.git';
       var cmdDisplay = document.getElementById('cloneCmdDisplay');
       if (!cmdDisplay) return;
 
       if (activeCmdTab === 'ps') {
-        cmdDisplay.textContent = 'git clone ' + repoUrl + '; cd arizo-telegram-self-manager; npm install';
+        cmdDisplay.textContent = 'git clone ' + repoUrl + '; cd Arizo_Self; npm install';
       } else {
-        cmdDisplay.textContent = 'git clone ' + repoUrl + ' && cd arizo-telegram-self-manager && npm install';
+        cmdDisplay.textContent = 'git clone ' + repoUrl + ' && cd Arizo_Self && npm install';
       }
     }
 
