@@ -257,7 +257,17 @@ export async function cfLocateWorker(tokenRaw, workerName) {
       if (err instanceof WizardError && err.code === 'cf_auth') throw err;
       continue;
     }
-    if ((scripts || []).some(x => x.id === workerName)) return { accountId: a.id, accountName: a.name };
+    if ((scripts || []).some(x => x.id === workerName)) {
+      const found = { accountId: a.id, accountName: a.name };
+      try {
+        const cur = await cfCall(token, `/accounts/${a.id}/workers/scripts/${workerName}/settings`);
+        const bs = Array.isArray(cur && cur.bindings) ? cur.bindings : [];
+        const kv = bs.find(b => b.name === 'KV' && b.type === 'kv_namespace' && b.namespace_id);
+        const d1 = bs.find(b => b.name === 'DB' && b.type === 'd1' && b.id);
+        if (kv && d1) { found.kvId = kv.namespace_id; found.d1Id = d1.id; }
+      } catch (_) { /* بدون بایندینگ فعلی؛ منابع جدید ساخته می‌شود */ }
+      return found;
+    }
   }
   throw new WizardError('worker_not_found',
     'Worker با نام «' + workerName + '» در اکانت‌های این توکن پیدا نشد. نام را بررسی کنید و توکنِ همان اکانتی را بدهید که Worker را در آن ساخته‌اید.',
