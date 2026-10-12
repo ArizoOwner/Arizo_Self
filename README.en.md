@@ -58,7 +58,7 @@
 
 <div align="center">
 
-### 「 ✦ 18 Core Capabilities ✦ 」
+### 「 ✦ 19 Core Capabilities ✦ 」
 
 </div>
 
@@ -279,6 +279,30 @@
 
 </td>
 </tr>
+<tr>
+<td width="50%">
+
+### 🔔 &nbsp; 19. Chat Alerts via a Separate Bot &nbsp;🆕
+> Get notified about selected chats, groups and DMs through a dedicated Telegram bot — separate from your main assistant bot.
+
+- 🎯 Pick chats by numeric ID, `@username` or `t.me` link — or use the keywords `all`, `private` and `groups`
+- 👑 Three trigger modes: **all messages**, **only admins & the owner** (channel posts always count), or **only specific people**
+- ⌨️ In-chat shortcuts: `.watch`, `.watch admins` and `.unwatch`
+- 🔗 Every alert carries an **Open Message** button (groups & channels)
+- 🛡️ Rate-limited to 20 alerts/min with a summary message, so busy groups never get the bot blocked
+- 🔒 The alert bot token never reaches the browser, and every bot belongs to exactly one user
+
+</td>
+<td width="50%">
+
+### 🧙 &nbsp; Setup Wizard
+> A guided web wizard at `/setup` that walks you from zero to a running panel.
+
+- 🌐 Live at [`/setup`](https://arizo-self.arizosupport.workers.dev/setup) (alias `/wizard`)
+- 🇮🇷 / 🇬🇧 bilingual, light & dark themes
+
+</td>
+</tr>
 </table>
 
 ---
@@ -300,6 +324,9 @@
 | `.mute` | Reply to user message | Mutes target user and auto-purges all incoming messages for both parties |
 | `.mute @username` | Any chat | Adds target username directly to mute blacklist and purges messages |
 | `.unmute` | Reply or username | Removes target user from mute blacklist and restores normal messaging |
+| `.watch` | Any chat / PM | Starts alerting every new message of this chat through the alert bot |
+| `.watch admins` | Group / Channel | Alerts only for messages from admins & the owner of this chat |
+| `.unwatch` | Any chat / PM | Stops alerts for this chat |
 | `/start` | Helper Bot PM | Opens the interactive Telegram Mini App studio launcher |
 | `/test` | Helper Bot PM | Sends a test verification message confirming logger delivery |
 | `/status` | Helper Bot PM | Inquires live selfbot status, memory footprint, and engine health |
@@ -504,7 +531,7 @@ pm2 save && pm2 startup
 <div align="center">
 <samp>
 
-**Arizo Self Engine v3.6 PRO** — Engineered with precision for maximum speed, bulletproof 2FA security & pure aesthetics 💎
+**Arizo Self Engine v3.6.2 PRO** — Engineered with precision for maximum speed, bulletproof 2FA security & pure aesthetics 💎
 
 Made with ❤️ by **Arizo Team**
 
