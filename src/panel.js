@@ -4217,6 +4217,15 @@ export function panelHTML(env, options = {}) {
 
           <div class="sys-card" id="sysApplyCard" style="margin-top:14px;">
             <div class="sys-card-title">⬇️ <span>به‌روزرسانی خودکار</span></div>
+            <div id="sysConnectedBox" class="hidden">
+              <div class="sys-status ok" id="sysConnectedInfo"></div>
+              <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin:8px 0;"><input type="checkbox" id="sysAutoToggle" onchange="toggleAutoUpdate(this.checked)"> <span>هر ۶ ساعت GitHub را بررسی کن و نسخهٔ جدید را خودکار نصب کن</span></label>
+              <div class="sys-help" id="sysLastResult"></div>
+              <div class="sys-actions" style="margin-top:8px;">
+                <button class="btn btn-secondary" onclick="disconnectUpdater()"><span>🔌 حذف توکن‌های ذخیره‌شده</span></button>
+              </div>
+            </div>
+            <div id="sysTokenBox">
             <div class="sys-help">برای جایگزینی کد این Worker با آخرین نسخه، یک توکن Cloudflare لازم است (همان مجوزهای ویزارد). توکن فقط برای همین درخواست استفاده می‌شود و ذخیره نمی‌شود. دیتابیس‌ها، رمزها، کاربران و تنظیمات دست‌نخورده می‌مانند.</div>
             <a class="sys-link" href="https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys=%5B%7B%22key%22%3A%22workers_scripts%22%2C%22type%22%3A%22edit%22%7D%5D&accountId=*&zoneId=all&name=Arizo%20Self%20Updater" target="_blank" rel="noopener"><span>🔑 ساخت توکن Cloudflare</span></a>
             <div class="form-group" style="margin-top:10px;">
@@ -4228,6 +4237,7 @@ export function panelHTML(env, options = {}) {
               <input type="text" id="sysWorkerName" class="input-field mono" autocomplete="off" spellcheck="false" placeholder="my-worker">
             </div>
 
+            <label style="display:flex;gap:8px;align-items:center;font-weight:600;margin:8px 0;"><input type="checkbox" id="sysRemember" checked> <span>توکن‌ها رمزنگاری و ذخیره شوند تا دفعات بعد بدون وارد کردن توکن (و به‌صورت خودکار) به‌روزرسانی شود</span></label>
             <div class="sys-section-sep"></div>
             <div class="sys-help">اگر رانر ۲۴ ساعته را روی GitHub دارید، می‌توانید فورک خودتان را هم با نسخهٔ اصلی هماهنگ و رانر را ری‌استارت کنید (اختیاری).</div>
             <label style="display:flex;gap:8px;align-items:center;font-weight:500;margin:8px 0;"><input type="checkbox" id="sysSyncRunner"> <span>رانر گیت‌هاب هم به‌روزرسانی شود</span></label>
@@ -4243,6 +4253,7 @@ export function panelHTML(env, options = {}) {
               </div>
             </div>
 
+            </div>
             <div class="sys-actions" style="margin-top:12px;">
               <button class="btn btn-primary" id="sysApplyBtn" onclick="applySystemUpdate()"><span>🚀 به‌روزرسانی همین حالا</span></button>
             </div>
@@ -6307,6 +6318,9 @@ export function panelHTML(env, options = {}) {
     var ADDITIONAL_TRANSLATIONS = {
       // 🔄 System & Updates tab
       "سیستم و به‌روزرسانی": "System & Updates",
+      "هر ۶ ساعت GitHub را بررسی کن و نسخهٔ جدید را خودکار نصب کن": "Check GitHub every 6 hours and install new versions automatically",
+      "🔌 حذف توکن‌های ذخیره‌شده": "🔌 Remove saved tokens",
+      "توکن‌ها رمزنگاری و ذخیره شوند تا دفعات بعد بدون وارد کردن توکن (و به‌صورت خودکار) به‌روزرسانی شود": "Store the tokens encrypted so future updates need no token (and can run automatically)",
       "مشخصات سامانه": "System specs",
       "نسخهٔ فعلی": "Current version",
       "شمارهٔ ساخت": "Build number",
@@ -7541,7 +7555,48 @@ export function panelHTML(env, options = {}) {
         var nameGroup = document.getElementById('sysNameGroup');
         if (nameGroup) nameGroup.classList.toggle('hidden', !!d.worker.name);
         if (!window.sysLatest) window.checkSystemUpdate(false);
+        window.loadUpdaterSettings();
       } catch (_) {}
+    };
+
+    window.sysSettings = null;
+    window.loadUpdaterSettings = async function() {
+      try {
+        var r = await fetch('/api/admin/update/settings', { headers: adminHeaders(), cache: 'no-store' });
+        var d = await r.json();
+        if (!d.ok) return;
+        window.sysSettings = d;
+        var en = sysEn();
+        var conn = document.getElementById('sysConnectedBox'), tok = document.getElementById('sysTokenBox');
+        if (conn) conn.classList.toggle('hidden', !d.connected);
+        if (tok) tok.classList.toggle('hidden', !!d.connected);
+        var rem = document.getElementById('sysRemember');
+        if (rem && !d.canStore) { rem.checked = false; rem.disabled = true; }
+        if (d.connected) {
+          sysText('sysConnectedInfo', (en ? '✅ Connected — Worker: ' : '✅ متصل — Worker: ') + d.workerName + (d.hasGh ? (en ? '  ·  runner: ' : '  ·  رانر: ') + (d.repo || (en ? 'your fork' : 'فورک شما')) : ''));
+          var t = document.getElementById('sysAutoToggle'); if (t) t.checked = !!d.auto;
+          var lr = d.lastResult, line = '';
+          if (lr) line = (lr.ok ? (en ? 'Last update: v' + lr.version : 'آخرین به‌روزرسانی: v' + lr.version) : (en ? 'Last auto-update failed: ' + lr.code : 'آخرین به‌روزرسانی خودکار ناموفق بود: ' + lr.code)) + ' — ' + sysDate(lr.at);
+          if (d.auto && d.lastCheck) line += (line ? '  |  ' : '') + (en ? 'last check: ' : 'آخرین بررسی: ') + sysDate(d.lastCheck);
+          sysText('sysLastResult', line);
+        }
+      } catch (_) {}
+    };
+
+    window.toggleAutoUpdate = async function(on) {
+      try {
+        var r = await fetch('/api/admin/update/auto', { method: 'POST', headers: adminHeaders(), body: JSON.stringify({ enabled: !!on }) });
+        var d = await r.json();
+        if (!d.ok) showToast(sysMsg(d), 'error');
+        else showToast(on ? (sysEn() ? 'Automatic updates enabled.' : 'به‌روزرسانی خودکار فعال شد.') : (sysEn() ? 'Automatic updates disabled.' : 'به‌روزرسانی خودکار غیرفعال شد.'), 'success');
+      } catch (_) { showToast(sysEn() ? 'Could not reach the server.' : 'ارتباط با سرور برقرار نشد.', 'error'); }
+      window.loadUpdaterSettings();
+    };
+
+    window.disconnectUpdater = async function() {
+      if (!confirm(sysEn() ? 'Remove the stored tokens? Automatic updates will stop.' : 'توکن‌های ذخیره‌شده حذف شوند؟ به‌روزرسانی خودکار متوقف می‌شود.')) return;
+      try { await fetch('/api/admin/update/disconnect', { method: 'POST', headers: adminHeaders(), body: '{}' }); } catch (_) {}
+      window.loadUpdaterSettings();
     };
 
     window.checkSystemUpdate = async function(fresh) {
@@ -7594,8 +7649,10 @@ export function panelHTML(env, options = {}) {
 
     window.applySystemUpdate = async function() {
       var en = sysEn();
+      var connected = !!(window.sysSettings && window.sysSettings.connected);
+      var remember = !!(document.getElementById('sysRemember') && document.getElementById('sysRemember').checked);
       var cf = (document.getElementById('sysCfToken').value || '').trim();
-      var wantRunner = !!document.getElementById('sysSyncRunner').checked;
+      var wantRunner = !connected && !!document.getElementById('sysSyncRunner').checked;
       var gh = (document.getElementById('sysGhToken').value || '').trim();
       var repo = (document.getElementById('sysGhRepo').value || '').trim();
       var nameInput = (document.getElementById('sysWorkerName').value || '').trim().toLowerCase();
@@ -7612,7 +7669,7 @@ export function panelHTML(env, options = {}) {
         });
         log.classList.remove('hidden');
       }
-      if (!cf) { showToast(en ? 'Enter the Cloudflare token first.' : 'ابتدا توکن Cloudflare را وارد کنید.', 'error'); return; }
+      if (!connected && !cf) { showToast(en ? 'Enter the Cloudflare token first.' : 'ابتدا توکن Cloudflare را وارد کنید.', 'error'); return; }
       if (wantRunner && !gh) { showToast(en ? 'Enter the GitHub token or untick the runner option.' : 'توکن GitHub را وارد کنید یا گزینهٔ رانر را بردارید.', 'error'); return; }
       var force = !!(window.sysLatest && !window.sysLatest.updateAvailable);
       if (force && !confirm(en ? 'You already have the latest version. Reinstall it anyway?' : 'شما آخرین نسخه را دارید. باز هم دوباره نصب شود؟')) return;
@@ -7621,9 +7678,23 @@ export function panelHTML(env, options = {}) {
       logs.push({ s: 'run', t: en ? 'Downloading and verifying the latest release, then replacing the code…' : 'دانلود و راستی‌آزمایی آخرین نسخه و جایگزینی کد…' });
       render();
       try {
+        var useStored = connected;
+        if (!connected && remember) {
+          var rc = await fetch('/api/admin/update/connect', {
+            method: 'POST', headers: adminHeaders(),
+            body: JSON.stringify({ cfToken: cf, ghToken: wantRunner ? gh : undefined, repo: wantRunner ? (repo || undefined) : undefined, workerName: nameInput || undefined })
+          });
+          var dc = await rc.json();
+          if (!dc.ok) {
+            logs[0] = { s: 'fail', t: sysMsg(dc) };
+            if (dc.code === 'need_worker_name') document.getElementById('sysNameGroup').classList.remove('hidden');
+            render(); return;
+          }
+          useStored = true; wantRunner = false;
+        }
         var r = await fetch('/api/admin/update/apply', {
           method: 'POST', headers: adminHeaders(),
-          body: JSON.stringify({ cfToken: cf, workerName: nameInput || undefined, force: force })
+          body: JSON.stringify(useStored ? { force: force } : { cfToken: cf, workerName: nameInput || undefined, force: force })
         });
         var d = await r.json();
         if (!d.ok) {
@@ -7641,6 +7712,8 @@ export function panelHTML(env, options = {}) {
             ? { s: 'done', t: (en ? 'Runner repository synced and restarted: ' : 'ریپوی رانر هماهنگ و ری‌استارت شد: ') + d2.repo }
             : { s: 'fail', t: sysMsg(d2) };
         }
+        if (d.runner === 'ok') logs.push({ s: 'done', t: en ? 'GitHub runner synced and restarted.' : 'رانر گیت‌هاب هم هماهنگ و ری‌استارت شد.' });
+        else if (d.runner === 'failed') logs.push({ s: 'fail', t: en ? 'The runner could not be synced (see GitHub).' : 'هماهنگ‌سازی رانر ناموفق بود (GitHub را بررسی کنید).' });
         logs.push({ s: 'done', t: en ? 'Done. The page will reload in a few seconds to load the new version.' : 'تمام شد. صفحه تا چند ثانیه دیگر برای بارگذاری نسخهٔ جدید دوباره باز می‌شود.' });
         render();
         document.getElementById('sysCfToken').value = '';
