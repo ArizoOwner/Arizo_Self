@@ -12,7 +12,6 @@ function createEnv() {
       async delete(k) { store.delete(k); },
       async list(o = {}) { return { keys: [...store.keys()].filter(k => k.startsWith(o.prefix || '')).map(name => ({ name })) }; }
     },
-    ADMIN_PASSWORD: 'SuperAdminPassword@2026',
     RUNNER_SECRET: 'SuperAdminPassword@2026'
   };
 }
@@ -163,7 +162,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
     try {
       const r = await handleWizardApi('cloudflare/deploy', {
         token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel', kvId: 'kvNew', d1Id: 'd1New',
-        adminPassword: 'A'.repeat(24), runnerSecret: 'B'.repeat(48)
+        runnerSecret: 'B'.repeat(48)
       });
       assertEqual(r.status, 200);
       const put = net.calls.find(c => c.method === 'PUT' && c.u.endsWith('/workers/scripts/my-panel'));
@@ -172,7 +171,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
       assertEqual(meta.main_module, 'worker.js');
       assert(meta.compatibility_flags.includes('nodejs_compat'));
       const types = Object.fromEntries(meta.bindings.map(b => [b.name, b.type]));
-      assertEqual(types.ADMIN_PASSWORD, 'secret_text');
+      assertEqual(types.ADMIN_PASSWORD, undefined);
       assertEqual(types.RUNNER_SECRET, 'secret_text');
       assertEqual(types.KV, 'kv_namespace');
       assertEqual(types.DB, 'd1');
@@ -184,7 +183,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
     try {
       const r = await handleWizardApi('cloudflare/deploy', {
         token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel', kvId: 'k', d1Id: 'd',
-        adminPassword: 'A'.repeat(24), runnerSecret: 'B'.repeat(48)
+        runnerSecret: 'B'.repeat(48)
       });
       assertEqual(r.data.code, 'integrity');
       assertEqual(net.calls.filter(c => c.method === 'PUT' && c.u.includes('/workers/scripts/')).length, 0);
@@ -356,7 +355,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
     assertEqual((await res.json()).error, 'setup_required');
   });
 
-  it('should report configured=true once ADMIN_PASSWORD and storage exist', async () => {
+  it('should report configured=true once storage exists', async () => {
     const env = createEnv();
     const st = await worker.fetch(new Request('https://arizo.test/api/setup/status', { method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': '198.51.100.8' }, body: '{}' }), env);
     assertEqual((await st.json()).configured, true);
@@ -406,14 +405,14 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
       return real(input, init);
     };
     try {
-      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'kvNew', d1Id: 'd1New', adminPassword: 'A'.repeat(24), runnerSecret: 'B'.repeat(48) });
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'kvNew', d1Id: 'd1New', runnerSecret: 'B'.repeat(48) });
       assertEqual(r.status, 200);
       const patch = net.calls.find(c => c.method === 'PATCH');
       assert(patch && patch.body instanceof FormData);
       const settings = JSON.parse(await patch.body.get('settings').text());
       const byName = Object.fromEntries(settings.bindings.map(b => [b.name, b]));
       assertEqual(byName.CUSTOM.type, 'inherit');
-      assertEqual(byName.ADMIN_PASSWORD.type, 'secret_text');
+      assertEqual(byName.ADMIN_PASSWORD, undefined);
       assertEqual(byName.RUNNER_SECRET.type, 'secret_text');
       assertEqual(byName.KV.type, 'kv_namespace');
       assertEqual(byName.DB.type, 'd1');
@@ -424,7 +423,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
   it('should refuse weak secrets when attaching', async () => {
     const net = mockNetwork();
     try {
-      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'k', d1Id: 'd', adminPassword: 'x', runnerSecret: 'y' });
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'k', d1Id: 'd', runnerSecret: 'y' });
       assertEqual(r.data.code, 'weak_secret');
     } finally { net.restore(); }
   });
