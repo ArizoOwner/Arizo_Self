@@ -15,7 +15,8 @@ const CF_PERMS = [
   { key: 'account_settings', type: 'read' }
 ];
 
-export function setupWizardHTML(env, url) {
+export function setupWizardHTML(env, url, opts = {}) {
+  const connect = !!(opts && opts.connect);
   const cfLink = 'https://dash.cloudflare.com/profile/api-tokens?permissionGroupKeys='
     + encodeURIComponent(JSON.stringify(CF_PERMS)) + '&accountId=*&zoneId=all&name=' + encodeURIComponent('Arizo Self Wizard');
   const ghLink = 'https://github.com/settings/tokens/new?scopes=repo,workflow&description=' + encodeURIComponent('Arizo Self Wizard');
@@ -113,7 +114,7 @@ footer{text-align:center;color:var(--dim);font-size:.76rem;margin-top:24px}
 <!-- مرحله ۱: Cloudflare -->
 <section class="card" id="s1">
   <h2><span class="num">1</span><span data-t="s1title">اتصال به Cloudflare</span></h2>
-  <p class="lead" data-t="s1lead">برای ساخت دیتابیس و استقرار پنل، یک توکن Cloudflare لازم است.</p>
+  <p class="lead" data-t="s1lead">برای ساخت دیتابیس و راه‌اندازی پنل، یک توکن Cloudflare لازم است.</p>
   <ol class="steps">
     <li>🔹 <span data-t="s1a">با دکمهٔ زیر صفحهٔ ساخت توکن را باز کنید (دسترسی‌ها از قبل انتخاب شده‌اند).</span></li>
     <li>🔹 <span data-t="s1b">گزینهٔ <b>Continue to summary</b> و بعد <b>Create Token</b> را بزنید.</span></li>
@@ -186,8 +187,8 @@ footer{text-align:center;color:var(--dim);font-size:.76rem;margin-top:24px}
 'use strict';
 var ORIGIN='';
 var T={
-fa:{studio:'🚪 استودیو',s1title:'اتصال به Cloudflare',s1lead:'برای ساخت دیتابیس و استقرار پنل، یک توکن Cloudflare لازم است.',s1a:'با دکمهٔ زیر صفحهٔ ساخت توکن را باز کنید (دسترسی‌ها از قبل انتخاب شده‌اند).',s1b:'گزینهٔ Continue to summary و بعد Create Token را بزنید.',s1c:'توکن را کپی کنید و پایین بچسبانید.',s1open:'🔑 ساخت توکن Cloudflare',s1label:'توکن Cloudflare',s1btn:'بررسی توکن',subLabel:'اکانت جدید است؛ یک نام برای آدرس workers.dev انتخاب کنید',subBtn:'ثبت نام',acctLabel:'اکانت Cloudflare',s2title:'اتصال به GitHub (برای رانر ۲۴ ساعته)',s2lead:'رانر ساعت و ربات را روی GitHub Actions اجرا می‌کند. ویزارد پروژه را برایتان فورک می‌کند و همه‌چیز را تنظیم می‌کند.',s2a:'با دکمهٔ زیر توکن بسازید (دسترسی‌های repo و workflow انتخاب شده‌اند).',s2b:'پایین صفحه Generate token را بزنید و توکن را کپی کنید.',s2open:'🔑 ساخت توکن GitHub',s2label:'توکن GitHub',s2btn:'بررسی توکن',skipGh:'رانر گیت‌هاب را فعلاً نمی‌خواهم (فقط پنل وب)',s3title:'نصب',s3label:'نام Worker',exists:'یک Worker با این نام از قبل در اکانت شما هست؛ نصب آن را به‌روزرسانی می‌کند و دیتابیس فعلی دست‌نخورده می‌ماند.',install:'☁️ نصب',cbTitle:'🔗 این Worker هنوز راه‌اندازی نشده است',cbText:'فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رانر را آماده می‌کند.',s3titleC:'اتصال و راه‌اندازی',s3labelC:'نام این Worker',installC:'🔗 اتصال و راه‌اندازی',hint:'توکن‌ها فقط در همین صفحه استفاده می‌شوند و جایی ذخیره نمی‌شوند.',progress:'در حال نصب…',retry:'🔁 تلاش دوباره',done:'نصب کامل شد',doneLead:'آخرین قدم: همین حالا در سایت ثبت‌نام کنید. اولین حسابی که ساخته شود، مدیر کل است و به بخش مدیریت هم دسترسی دارد.',kvCode:'کد راه‌اندازی',doneWarn:'اولین حساب فقط با «کد راه‌اندازی» ساخته می‌شود و دکمهٔ بالا آن را خودکار وارد می‌کند. لینک را فقط خودتان باز کنید و کد را با کسی به اشتراک نگذارید.',kvUrl:'آدرس پنل',kvRepo:'ریپوی شما',copy:'کپی',openPanel:'🚀 ساخت حساب مدیر',openActions:'⚙️ مشاهدهٔ رانر'},
-en:{studio:'🚪 Studio',s1title:'Connect Cloudflare',s1lead:'A Cloudflare token is needed to create the database and deploy the panel.',s1a:'Open the token page with the button below (permissions are pre-selected).',s1b:'Click Continue to summary, then Create Token.',s1c:'Copy the token and paste it below.',s1open:'🔑 Create Cloudflare token',s1label:'Cloudflare token',s1btn:'Verify token',subLabel:'New account — pick a name for your workers.dev address',subBtn:'Save name',acctLabel:'Cloudflare account',s2title:'Connect GitHub (for the 24/7 runner)',s2lead:'The runner executes the clock and bot on GitHub Actions. The wizard forks the project and configures everything.',s2a:'Create a token with the button below (repo and workflow scopes are pre-selected).',s2b:'Click Generate token at the bottom and copy it.',s2open:'🔑 Create GitHub token',s2label:'GitHub token',s2btn:'Verify token',skipGh:'Skip the GitHub runner for now (web panel only)',s3title:'Install',s3label:'Worker name',exists:'A Worker with this name already exists in your account; installing will update it and keep the current database untouched.',install:'☁️ Install',cbTitle:'🔗 This Worker is not set up yet',cbText:'You deployed the file to Cloudflare; the wizard will now create the databases, attach them to this very Worker and prepare the runner.',s3titleC:'Connect and set up',s3labelC:'Name of this Worker',installC:'🔗 Connect and set up',hint:'Tokens are only used on this page and are never stored.',progress:'Installing…',retry:'🔁 Retry',done:'Installation complete',doneLead:'Last step: register on the site right now. The first account created becomes the owner and also gets access to the management area.',kvCode:'Setup code',doneWarn:'The first account can only be created with the setup code, and the button above fills it in for you. Open the link yourself and do not share the code.',kvUrl:'Panel URL',kvRepo:'Your repository',copy:'Copy',openPanel:'🚀 Create the owner account',openActions:'⚙️ View runner'}
+fa:{studio:'🚪 استودیو',s1title:'اتصال به Cloudflare',s1lead:'برای ساخت دیتابیس و راه‌اندازی پنل، یک توکن Cloudflare لازم است.',s1a:'با دکمهٔ زیر صفحهٔ ساخت توکن را باز کنید (دسترسی‌ها از قبل انتخاب شده‌اند).',s1b:'گزینهٔ Continue to summary و بعد Create Token را بزنید.',s1c:'توکن را کپی کنید و پایین بچسبانید.',s1open:'🔑 ساخت توکن Cloudflare',s1label:'توکن Cloudflare',s1btn:'بررسی توکن',subLabel:'اکانت جدید است؛ یک نام برای آدرس workers.dev انتخاب کنید',subBtn:'ثبت نام',acctLabel:'اکانت Cloudflare',s2title:'اتصال به GitHub (برای رانر ۲۴ ساعته)',s2lead:'رانر ساعت و ربات را روی GitHub Actions اجرا می‌کند. ویزارد پروژه را برایتان فورک می‌کند و همه‌چیز را تنظیم می‌کند.',s2a:'با دکمهٔ زیر توکن بسازید (دسترسی‌های repo و workflow انتخاب شده‌اند).',s2b:'پایین صفحه Generate token را بزنید و توکن را کپی کنید.',s2open:'🔑 ساخت توکن GitHub',s2label:'توکن GitHub',s2btn:'بررسی توکن',skipGh:'رانر گیت‌هاب را فعلاً نمی‌خواهم (فقط پنل وب)',s3title:'نصب',s3label:'نام Worker',exists:'یک Worker با این نام از قبل در اکانت شما هست؛ نصب آن را به‌روزرسانی می‌کند و دیتابیس فعلی دست‌نخورده می‌ماند.',install:'☁️ نصب',cbTitle:'🔗 این Worker هنوز راه‌اندازی نشده است',cbText:'فایل را در Cloudflare دیپلوی کرده‌اید؛ حالا ویزارد دیتابیس را می‌سازد، به همین Worker وصل می‌کند و رانر را آماده می‌کند.',s3titleC:'راه‌اندازی',progressC:'در حال راه‌اندازی…',doneC:'راه‌اندازی کامل شد',s3labelC:'نام این Worker',installC:'🚀 راه‌اندازی',hint:'توکن‌ها فقط در همین صفحه استفاده می‌شوند و جایی ذخیره نمی‌شوند.',progress:'در حال نصب…',retry:'🔁 تلاش دوباره',done:'نصب کامل شد',doneLead:'آخرین قدم: همین حالا در سایت ثبت‌نام کنید. اولین حسابی که ساخته شود، مدیر کل است و به بخش مدیریت هم دسترسی دارد.',kvCode:'کد راه‌اندازی',doneWarn:'اولین حساب فقط با «کد راه‌اندازی» ساخته می‌شود و دکمهٔ بالا آن را خودکار وارد می‌کند. لینک را فقط خودتان باز کنید و کد را با کسی به اشتراک نگذارید.',kvUrl:'آدرس پنل',kvRepo:'ریپوی شما',copy:'کپی',openPanel:'🚀 ساخت حساب مدیر',openActions:'⚙️ مشاهدهٔ رانر'},
+en:{studio:'🚪 Studio',s1title:'Connect Cloudflare',s1lead:'A Cloudflare token is needed to create the database and set up the panel.',s1a:'Open the token page with the button below (permissions are pre-selected).',s1b:'Click Continue to summary, then Create Token.',s1c:'Copy the token and paste it below.',s1open:'🔑 Create Cloudflare token',s1label:'Cloudflare token',s1btn:'Verify token',subLabel:'New account — pick a name for your workers.dev address',subBtn:'Save name',acctLabel:'Cloudflare account',s2title:'Connect GitHub (for the 24/7 runner)',s2lead:'The runner executes the clock and bot on GitHub Actions. The wizard forks the project and configures everything.',s2a:'Create a token with the button below (repo and workflow scopes are pre-selected).',s2b:'Click Generate token at the bottom and copy it.',s2open:'🔑 Create GitHub token',s2label:'GitHub token',s2btn:'Verify token',skipGh:'Skip the GitHub runner for now (web panel only)',s3title:'Install',s3label:'Worker name',exists:'A Worker with this name already exists in your account; installing will update it and keep the current database untouched.',install:'☁️ Install',cbTitle:'🔗 This Worker is not set up yet',cbText:'You deployed the file to Cloudflare; the wizard will now create the databases, attach them to this very Worker and prepare the runner.',s3titleC:'Set up',progressC:'Setting up…',doneC:'Setup complete',s3labelC:'Name of this Worker',installC:'🚀 Set up',hint:'Tokens are only used on this page and are never stored.',progress:'Installing…',retry:'🔁 Retry',done:'Installation complete',doneLead:'Last step: register on the site right now. The first account created becomes the owner and also gets access to the management area.',kvCode:'Setup code',doneWarn:'The first account can only be created with the setup code, and the button above fills it in for you. Open the link yourself and do not share the code.',kvUrl:'Panel URL',kvRepo:'Your repository',copy:'Copy',openPanel:'🚀 Create the owner account',openActions:'⚙️ View runner'}
 };
 var lang=document.documentElement.getAttribute('lang')==='en'?'en':'fa';
 function $(id){return document.getElementById(id)}
@@ -209,19 +210,25 @@ applyTheme(document.documentElement.getAttribute('data-theme')||'dark');applyLan
 var eyes=document.querySelectorAll('[data-eye]');
 for(var e=0;e<eyes.length;e++){eyes[e].onclick=function(){var i=$(this.getAttribute('data-eye'));i.type=i.type==='password'?'text':'password';};}
 
-var S={cf:{ok:false,accountId:'',subdomain:''},gh:{ok:false,login:''},installing:false,res:null,connect:false};
+var S={cf:{ok:false,accountId:'',subdomain:''},gh:{ok:false,login:''},installing:false,res:null,connect:${connect ? 'true' : 'false'}};
 function guessName(){var l=location.hostname.toLowerCase().split('.');return (l.length===4&&l[2]==='workers'&&l[3]==='dev'&&/^[a-z0-9][a-z0-9-]{0,53}$/.test(l[0]))?l[0]:'';}
 function applyMode(){
   $('connectBanner').classList.toggle('hidden',!S.connect);
   var g=guessName();
   if(S.connect){$('workerName').value=g;$('workerName').readOnly=!!g;$('workerName').placeholder='my-worker';}
+  var hideName=S.connect&&!!g;
+  $('workerName').classList.toggle('hidden',hideName);
+  document.querySelector('#s3 label[for=workerName]').classList.toggle('hidden',hideName);
+  document.querySelector('#progressCard h2 span').setAttribute('data-t',S.connect?'progressC':'progress');
+  document.querySelector('#resultCard h2 span').setAttribute('data-t',S.connect?'doneC':'done');
   var tk=S.connect?'s3titleC':'s3title',lk=S.connect?'s3labelC':'s3label',ik=S.connect?'installC':'install';
   document.querySelector('#s3 h2 span:last-child').setAttribute('data-t',tk);
   document.querySelector('#s3 label[for=workerName]').setAttribute('data-t',lk);
   $('install').setAttribute('data-t',ik);
   applyLang();refresh();
 }
-api('status',{}).then(function(d){if(d&&d.ok&&d.configured===false){S.connect=true;applyMode();}});
+if(S.connect)applyMode();
+api('status',{}).then(function(d){if(d&&d.ok&&d.configured===false&&!S.connect){S.connect=true;applyMode();}});
 
 function setStatus(id,cls,msg){var el=$(id);el.className='status '+cls;el.textContent=msg;}
 function msgOf(d){return (lang==='en'?d.en:d.fa)||d.en||'Error';}
