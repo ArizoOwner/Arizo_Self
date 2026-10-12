@@ -71,6 +71,7 @@ function createMockEnv(opts = {}) {
 describe('Worker Suite — Edge Security & API Lifecycle', () => {
   it('should serve HTML panel with enterprise security headers', async () => {
     const env = createMockEnv();
+    await env.KV.put('users_list', JSON.stringify(['boss']));
     const req = new Request('https://arizo.test/');
     const res = await worker.fetch(req, env);
 
