@@ -9,7 +9,7 @@ import { APP_VERSION, APP_BUILD, APP_CHANNEL } from '../version.js';
 import { encryptSession, decryptSession } from '../crypto.js';
 import {
   SOURCE_REPO, WORKFLOW_FILE, REPO_RE, WizardError,
-  cfCall, ghCall, ghFail, requireToken, validateWorkerName,
+  cfCall, ghCall, ghFail, requireToken, validateWorkerName, fetchRetry,
   fetchWorkerSource, cfLocateWorker
 } from './wizardDeploy.js';
 
@@ -35,7 +35,7 @@ export async function fetchLatestRelease({ fresh = false } = {}) {
   if (!fresh && releaseCache && Date.now() - releaseCache.at < 60000) return releaseCache.data;
   let res;
   try {
-    res = await fetch(VERSION_INFO_URL, { redirect: 'follow' });
+    res = await fetchRetry(VERSION_INFO_URL, { redirect: 'follow' });
   } catch (_) {
     throw new WizardError('network', 'ارتباط با GitHub برقرار نشد.', 'Could not reach GitHub.', 502);
   }
@@ -228,6 +228,9 @@ export async function autoUpdateTick(env) {
     // هر شمارهٔ ساخت فقط یک بار خودکار نصب می‌شود؛ اگر ریلیز ناسازگار منتشر شود، حلقهٔ نصب تکراری ایجاد نمی‌شود
     if (latest.build > APP_BUILD && latest.build > (st.lastInstalledBuild || 0)) await runStoredUpdate(env, { source: 'auto' });
   } catch (e) {
-    await putUpdaterState(env, { lastResult: { at: now, ok: false, source: 'auto', code: (e && e.code) || 'internal' } });
+    // خطای موقت (مثلاً محدودیت نرخ GitHub): به‌جای ۶ ساعت انتظار، ۱۵ دقیقهٔ دیگر دوباره تلاش می‌شود
+    const retryIn = 15 * 60 * 1000;
+    globalThis.__updNext = now + retryIn;
+    await putUpdaterState(env, { lastCheck: now - AUTO_INTERVAL + retryIn, lastResult: { at: now, ok: false, source: 'auto', code: (e && e.code) || 'internal' } });
   }
 }
