@@ -24,10 +24,33 @@ import { CustomFile } from 'telegram/client/uploads.js';
 import { strippedPhotoToJpg } from 'telegram/Utils.js';
 import { getStylizedTime, renderDynamicBio, isSleepTime } from '../src/clock.js';
 import { decryptSession } from '../src/crypto.js';
+import { createHash, randomBytes } from 'crypto';
 import { pickNotifyingRule, buildAlertText, buildMessageLink, bareChatId, sanitizeWatchAlerts, cleanTarget } from '../src/modules/watchAlerts.js';
 
+
+// ==========================================
+// 🔒 پاک‌سازی لاگ‌ها: ریپو عمومی است و لاگ Actions برای همه قابل مشاهده است
+// ==========================================
+const LOG_SALT = randomBytes(6).toString('hex');
+const REDACT_NAMES = new Set();
+function redactLine(s) {
+  return String(s)
+    .replace(/\[([A-Za-z0-9_]{2,32})\]/g, (m, n) => REDACT_NAMES.has(n.toLowerCase())
+      ? '[' + createHash('sha256').update(LOG_SALT + n.toLowerCase()).digest('hex').slice(0, 6) + ']'
+      : m)
+    .replace(/-?\d{6,}/g, d => '…' + d.slice(-2));
+}
+for (const level of ['log', 'info', 'warn', 'error']) {
+  const original = console[level].bind(console);
+  console[level] = (...args) => original(...args.map(a => (typeof a === 'string' ? redactLine(a) : (a instanceof Error ? redactLine(a.stack || a.message) : a))));
+}
+
 const CLOUDFLARE_URL = (process.env.CLOUDFLARE_URL || 'https://arizo-self.arizosupport.workers.dev').replace(/\/+$/, '');
-const RUNNER_SECRET = process.env.RUNNER_SECRET || process.env.ADMIN_PASSWORD || 'admin_liquid_secret_2026';
+const RUNNER_SECRET = process.env.RUNNER_SECRET || process.env.ADMIN_PASSWORD;
+if (!RUNNER_SECRET) {
+  console.error('❌ Error: RUNNER_SECRET environment variable is required.');
+  process.exit(1);
+}
 const API_ID = parseInt(process.env.API_ID || '2040');
 const API_HASH = process.env.API_HASH || 'b18441a1ff607e10a989891a5462e627';
 const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
@@ -1111,7 +1134,7 @@ async function processWatchAlert(entry, username, message, ctx) {
   const link = buildMessageLink(chat, message.id);
   const keyboard = link ? { inline_keyboard: [[{ text: '🔗 باز کردن پیام', url: link }]] } : null;
   const ok = await sendBotTelegramMessage(wa.botToken, wa.chatId, text, keyboard);
-  if (ok) console.log(`🔔 [${username}] Watch alert sent for chat ${chat.title || chat.id} (rule: ${rule.mode})`);
+  if (ok) console.log(`🔔 [${username}] Watch alert sent (rule: ${rule.mode})`);
 }
 
 /**
@@ -2900,6 +2923,7 @@ async function fetchActiveUsers() {
 
     const data = await res.json();
     lastCachedUsersList = data.users || [];
+    for (const u of lastCachedUsersList) if (u && u.username) REDACT_NAMES.add(String(u.username).toLowerCase());
     return lastCachedUsersList;
   } catch (err) {
     console.error('⚠️ Cloudflare fetchActiveUsers error:', err.message);
