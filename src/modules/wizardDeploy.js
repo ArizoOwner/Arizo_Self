@@ -204,7 +204,7 @@ export async function fetchWorkerSource(url = WORKER_ASSET_URL) {
   return buf;
 }
 
-export function buildWorkerMetadata({ kvId, d1Id, runnerSecret }) {
+export function buildWorkerMetadata({ kvId, d1Id, runnerSecret, setupCode }) {
   return {
     main_module: 'worker.js',
     compatibility_date: COMPAT_DATE,
@@ -214,22 +214,31 @@ export function buildWorkerMetadata({ kvId, d1Id, runnerSecret }) {
       { type: 'd1', name: 'DB', id: d1Id },
       { type: 'plain_text', name: 'API_ID', text: TELEGRAM_API_ID },
       { type: 'plain_text', name: 'API_HASH', text: TELEGRAM_API_HASH },
-      { type: 'secret_text', name: 'RUNNER_SECRET', text: runnerSecret }
+      { type: 'secret_text', name: 'RUNNER_SECRET', text: runnerSecret },
+      { type: 'secret_text', name: 'SETUP_CODE', text: setupCode }
     ]
   };
 }
 
+/** کد راه‌اندازی یک‌بار مصرف: فقط دارندهٔ آن می‌تواند اولین حساب (مدیر کل) را بسازد */
+function requireSetupCode(code) {
+  if (!/^[A-Za-z0-9_-]{16,128}$/.test(String(code || ''))) {
+    throw new WizardError('weak_secret', 'کد راه‌اندازی نامعتبر است.', 'The setup code is invalid.');
+  }
+}
+
 /** مرحلهٔ ۳: آپلود Worker با بایندینگ‌ها و سکرت‌ها */
-export async function cfDeployWorker(tokenRaw, accountId, { workerName, kvId, d1Id, runnerSecret, source }) {
+export async function cfDeployWorker(tokenRaw, accountId, { workerName, kvId, d1Id, runnerSecret, setupCode, source }) {
   const token = requireToken(tokenRaw, 'cf');
   validateWorkerName(workerName);
   if (!kvId || !d1Id) throw new WizardError('bad_request', 'شناسه KV یا D1 ارسال نشده است.', 'KV or D1 id is missing.');
   if (String(runnerSecret || '').length < 16) {
     throw new WizardError('weak_secret', 'رمز رانر باید حداقل ۱۶ کاراکتر باشد.', 'The runner secret must be at least 16 characters long.');
   }
+  requireSetupCode(setupCode);
   const code = source || await fetchWorkerSource();
   const form = new FormData();
-  form.append('metadata', new Blob([JSON.stringify(buildWorkerMetadata({ kvId, d1Id, runnerSecret }))], { type: 'application/json' }));
+  form.append('metadata', new Blob([JSON.stringify(buildWorkerMetadata({ kvId, d1Id, runnerSecret, setupCode }))], { type: 'application/json' }));
   form.append('worker.js', new Blob([code], { type: 'application/javascript+module' }), 'worker.js');
   await cfCall(token, `/accounts/${accountId}/workers/scripts/${workerName}`, { method: 'PUT', form });
   return { workerName };
@@ -256,22 +265,23 @@ export async function cfLocateWorker(tokenRaw, workerName) {
 }
 
 /** حالت «اتصال»: بایندینگ‌ها و رمزها را روی همین Worker در حال اجرا ثبت می‌کند (بدون آپلود دوبارهٔ کد) */
-export async function cfAttachWorker(tokenRaw, accountId, { workerName, kvId, d1Id, runnerSecret }) {
+export async function cfAttachWorker(tokenRaw, accountId, { workerName, kvId, d1Id, runnerSecret, setupCode }) {
   const token = requireToken(tokenRaw, 'cf');
   validateWorkerName(workerName);
   if (!kvId || !d1Id) throw new WizardError('bad_request', 'شناسه KV یا D1 ارسال نشده است.', 'KV or D1 id is missing.');
   if (String(runnerSecret || '').length < 16) {
     throw new WizardError('weak_secret', 'رمز رانر باید حداقل ۱۶ کاراکتر باشد.', 'The runner secret must be at least 16 characters long.');
   }
+  requireSetupCode(setupCode);
   const path = `/accounts/${accountId}/workers/scripts/${workerName}/settings`;
   const current = await cfCall(token, path);
   const existing = Array.isArray(current && current.bindings) ? current.bindings : [];
   const has = n => existing.some(b => b.name === n);
   const keepOwn = new Set(['KV', 'DB', 'API_ID', 'API_HASH'].filter(has));
-  const replaced = new Set(['ADMIN_PASSWORD', 'RUNNER_SECRET']); // ADMIN_PASSWORD قدیمی حذف می‌شود
+  const replaced = new Set(['ADMIN_PASSWORD', 'RUNNER_SECRET', 'SETUP_CODE']);
   const bindings = [
     ...existing.filter(b => !replaced.has(b.name)).map(b => ({ type: 'inherit', name: b.name })),
-    ...buildWorkerMetadata({ kvId, d1Id, runnerSecret }).bindings.filter(b => !keepOwn.has(b.name))
+    ...buildWorkerMetadata({ kvId, d1Id, runnerSecret, setupCode }).bindings.filter(b => !keepOwn.has(b.name))
   ];
   const settings = {
     bindings,
@@ -449,11 +459,11 @@ export async function handleWizardApi(step, body = {}, options = {}) {
       case 'cloudflare/locate':
         return ok(await cfLocateWorker(b.token, b.workerName));
       case 'cloudflare/attach':
-        return ok(await cfAttachWorker(b.token, str(b.accountId), pick(b, ['workerName', 'kvId', 'd1Id', 'runnerSecret'])));
+        return ok(await cfAttachWorker(b.token, str(b.accountId), pick(b, ['workerName', 'kvId', 'd1Id', 'runnerSecret', 'setupCode'])));
       case 'cloudflare/resources':
         return ok(await cfEnsureResources(b.token, str(b.accountId), b.workerName));
       case 'cloudflare/deploy':
-        return ok(await cfDeployWorker(b.token, str(b.accountId), { ...pick(b, ['workerName', 'kvId', 'd1Id', 'runnerSecret']), source: options.workerSource }));
+        return ok(await cfDeployWorker(b.token, str(b.accountId), { ...pick(b, ['workerName', 'kvId', 'd1Id', 'runnerSecret', 'setupCode']), source: options.workerSource }));
       case 'cloudflare/finalize':
         return ok(await cfFinalize(b.token, str(b.accountId), pick(b, ['workerName', 'd1Id'])));
       case 'github/verify':
