@@ -18,7 +18,6 @@ function createEnv() {
         return { keys: [...store.keys()].filter(k => k.startsWith(prefix)).map(name => ({ name })) };
       }
     },
-    ADMIN_PASSWORD: 'SuperAdminPassword@2026',
     RUNNER_SECRET: 'SuperAdminPassword@2026',
     API_ID: '2040',
     API_HASH: 'b18441a1ff607e10a989891a5462e627',
