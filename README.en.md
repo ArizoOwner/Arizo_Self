@@ -14,7 +14,7 @@
 <br>
 
 <a href="https://github.com/ArizoOwner/Arizo_Self/actions"><img src="https://img.shields.io/badge/⚡_Engine_Status-24%2F7_Active-22c55e?style=for-the-badge&labelColor=0d1117" alt="Engine Status"/></a>
-<a href="#"><img src="https://img.shields.io/badge/Response_Time-<%2040ms-a855f7?style=for-the-badge&labelColor=0d1117" alt="Response Time"/></a>
+<a href="#"><img src="https://img.shields.io/badge/Response_Time-%3C%2040ms-a855f7?style=for-the-badge&labelColor=0d1117" alt="Response Time"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Security-2FA_TOTP_+_Honeypot-ec4899?style=for-the-badge&labelColor=0d1117" alt="Security"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Uptime-99.9%25-0ea5e9?style=for-the-badge&labelColor=0d1117" alt="Uptime"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Version-3.6_PRO-f59e0b?style=for-the-badge&labelColor=0d1117" alt="Version"/></a>
