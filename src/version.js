@@ -3,7 +3,7 @@
 export const APP_NAME = 'Arizo Self';
 export const APP_VERSION = '3.6.2';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026101209;
+export const APP_BUILD = 2026101210;
 
 export const RELEASE_NOTES = {
   fa: [
