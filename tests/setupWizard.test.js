@@ -1,9 +1,10 @@
 import { describe, it, assert, assertEqual } from './test-runner.js';
-import worker from '../src/index.js';
+import worker, { resetStorageCachesForTests } from '../src/index.js';
 import { handleWizardApi, sealSecret, buildWorkerMetadata, fetchWorkerSource } from '../src/modules/wizardDeploy.js';
 import nacl from 'tweetnacl';
 
 function createEnv() {
+  resetStorageCachesForTests();
   const store = new Map();
   return {
     KV: {
@@ -162,7 +163,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
     try {
       const r = await handleWizardApi('cloudflare/deploy', {
         token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel', kvId: 'kvNew', d1Id: 'd1New',
-        runnerSecret: 'B'.repeat(48)
+        runnerSecret: 'B'.repeat(48), setupCode: 'S'.repeat(32)
       });
       assertEqual(r.status, 200);
       const put = net.calls.find(c => c.method === 'PUT' && c.u.endsWith('/workers/scripts/my-panel'));
@@ -173,6 +174,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
       const types = Object.fromEntries(meta.bindings.map(b => [b.name, b.type]));
       assertEqual(types.ADMIN_PASSWORD, undefined);
       assertEqual(types.RUNNER_SECRET, 'secret_text');
+      assertEqual(types.SETUP_CODE, 'secret_text');
       assertEqual(types.KV, 'kv_namespace');
       assertEqual(types.DB, 'd1');
     } finally { net.restore(); }
@@ -183,7 +185,7 @@ describe('Setup Wizard — Cloudflare automation', () => {
     try {
       const r = await handleWizardApi('cloudflare/deploy', {
         token: CF_TOKEN, accountId: 'acc1', workerName: 'my-panel', kvId: 'k', d1Id: 'd',
-        runnerSecret: 'B'.repeat(48)
+        runnerSecret: 'B'.repeat(48), setupCode: 'S'.repeat(32)
       });
       assertEqual(r.data.code, 'integrity');
       assertEqual(net.calls.filter(c => c.method === 'PUT' && c.u.includes('/workers/scripts/')).length, 0);
@@ -405,7 +407,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
       return real(input, init);
     };
     try {
-      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'kvNew', d1Id: 'd1New', runnerSecret: 'B'.repeat(48) });
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'kvNew', d1Id: 'd1New', runnerSecret: 'B'.repeat(48), setupCode: 'S'.repeat(32) });
       assertEqual(r.status, 200);
       const patch = net.calls.find(c => c.method === 'PATCH');
       assert(patch && patch.body instanceof FormData);
@@ -414,6 +416,7 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
       assertEqual(byName.CUSTOM.type, 'inherit');
       assertEqual(byName.ADMIN_PASSWORD, undefined);
       assertEqual(byName.RUNNER_SECRET.type, 'secret_text');
+      assertEqual(byName.SETUP_CODE.type, 'secret_text');
       assertEqual(byName.KV.type, 'kv_namespace');
       assertEqual(byName.DB.type, 'd1');
       assert(settings.compatibility_flags.includes('nodejs_compat'));
@@ -432,5 +435,75 @@ describe('Setup Wizard — connect mode (raw worker.js deploy)', () => {
     const res = await worker.fetch(new Request('https://raw.workers.dev/setup'), rawEnv());
     const html = await res.text();
     assert(html.includes('cloudflare/') && html.includes("api('status'") && html.includes('connectBanner'));
+  });
+});
+
+describe('Setup Wizard — one-time setup code (first-owner protection)', () => {
+  const codeEnv = (code = 'CodeFromWizard1234567890abcdef') => ({ ...createEnv(), SETUP_CODE: code });
+  const register = (env, body, ip) => worker.fetch(new Request('https://arizo.test/api/user/register', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', 'cf-connecting-ip': ip }, body: JSON.stringify(body)
+  }), env);
+
+  it('should refuse a missing or wrong setup code for the very first account', async () => {
+    const env = codeEnv();
+    const none = await register(env, { username: 'intruder', password: 'Intruder@2026xx' }, '203.0.113.31');
+    assertEqual(none.status, 403);
+    assertEqual((await none.json()).code, 'setup_code_required');
+    const wrong = await register(env, { username: 'intruder', password: 'Intruder@2026xx', setupCode: 'nope-nope-nope-nope' }, '203.0.113.32');
+    assertEqual(wrong.status, 403);
+    const list = await env.KV.get('users_list', 'json');
+    assert(!list || list.length === 0, 'no account may be created');
+  });
+
+  it('should make the holder of the setup code the owner admin', async () => {
+    const env = codeEnv();
+    const res = await register(env, { username: 'realowner', password: 'RealOwner@2026x', setupCode: 'CodeFromWizard1234567890abcdef' }, '203.0.113.33');
+    assertEqual(res.status, 200);
+    const data = await res.json();
+    assertEqual(data.isAdmin, true);
+    assertEqual(data.plan, 'lifetime');
+  });
+
+  it('should ignore the setup code once the owner exists and require a license after that', async () => {
+    const env = codeEnv();
+    await register(env, { username: 'realowner', password: 'RealOwner@2026x', setupCode: 'CodeFromWizard1234567890abcdef' }, '203.0.113.34');
+    const late = await register(env, { username: 'latecomer', password: 'Latecomer@2026x', setupCode: 'CodeFromWizard1234567890abcdef' }, '203.0.113.35');
+    assertEqual(late.status, 400);
+    const boot = await (await worker.fetch(new Request('https://arizo.test/api/bootstrap'), env)).json();
+    assertEqual(boot.firstAdmin, false);
+    assertEqual(boot.needsCode, false);
+  });
+
+  it('should tell the panel when a setup code is required and never reveal it', async () => {
+    const env = codeEnv('TopSecretSetupCodeValue1234567');
+    const res = await worker.fetch(new Request('https://arizo.test/api/bootstrap'), env);
+    const text = await res.text();
+    const boot = JSON.parse(text);
+    assertEqual(boot.firstAdmin, true);
+    assertEqual(boot.needsCode, true);
+    assert(!text.includes('TopSecret'));
+  });
+
+  it('should keep the original open behaviour for older installs without a setup code', async () => {
+    const env = createEnv();
+    const res = await register(env, { username: 'legacyowner', password: 'LegacyOwner@2026x' }, '203.0.113.36');
+    assertEqual(res.status, 200);
+    assertEqual((await res.json()).isAdmin, true);
+  });
+
+  it('should reject malformed setup codes at deploy time', async () => {
+    const net = mockNetwork();
+    try {
+      const r = await handleWizardApi('cloudflare/attach', { token: CF_TOKEN, accountId: 'acc1', workerName: 'arizo-self', kvId: 'k', d1Id: 'd', runnerSecret: 'B'.repeat(48), setupCode: 'short' });
+      assertEqual(r.status, 400);
+      assertEqual(net.calls.filter(c => c.method === 'PATCH').length, 0);
+    } finally { net.restore(); }
+  });
+
+  it('should hand the setup code to the owner only through the URL fragment', async () => {
+    const res = await worker.fetch(new Request('https://arizo.test/setup'), createEnv());
+    const html = await res.text();
+    assert(html.includes("'/#setup='"), 'result link must use the fragment so the code never reaches a server log');
+    assert(!html.includes('?setup='));
   });
 });
