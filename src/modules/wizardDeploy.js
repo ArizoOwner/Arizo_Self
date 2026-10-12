@@ -179,10 +179,25 @@ export async function cfEnsureResources(tokenRaw, accountId, workerName) {
 }
 
 /** دانلود worker.js از ریلیز رسمی و راستی‌آزمایی با SHA-256 */
+/** GET با چند تلاش مجدد برای ۴۲۹/۵xx و خطای شبکه (IPهای مشترک Workers گاهی از GitHub محدودیت نرخ می‌گیرند) */
+export async function fetchRetry(url, init = {}, tries = 4) {
+  let last;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const res = await fetch(url, init);
+      if (res.status !== 429 && res.status < 500) return res;
+      last = res;
+    } catch (e) { last = e; }
+    if (i < tries - 1) await new Promise(r => setTimeout(r, 400 * (i + 1) ** 2));
+  }
+  if (last instanceof Response) return last;
+  throw last;
+}
+
 export async function fetchWorkerSource(url = WORKER_ASSET_URL) {
   let res, shaRes;
   try {
-    [res, shaRes] = await Promise.all([fetch(url, { redirect: 'follow' }), fetch(url + '.sha256', { redirect: 'follow' })]);
+    [res, shaRes] = await Promise.all([fetchRetry(url, { redirect: 'follow' }), fetchRetry(url + '.sha256', { redirect: 'follow' })]);
   } catch (_) {
     throw new WizardError('download', 'دانلود worker.js از GitHub ممکن نشد.', 'Could not download worker.js from GitHub.', 502);
   }
