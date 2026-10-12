@@ -316,6 +316,59 @@ function publicWatchAlerts(telegram) {
   };
 }
 
+/**
+ * 🔐 توکن امنیتی وب‌هوک تلگرام: مشتق‌شده با HMAC از یک کلید ثابتِ ذخیره‌شده در KV (مستقل از رمزهای مدیریت)
+ * تا هیچ‌کس نتواند آپدیت جعلی به /api/bot-webhook/<username> بفرستد.
+ */
+async function getWebhookKey(env) {
+  if (globalThis.__whKey) return globalThis.__whKey;
+  let key = await env.KV.get('sys:webhook_key');
+  if (!key) {
+    key = generateRandomHex(32);
+    await env.KV.put('sys:webhook_key', key);
+  }
+  globalThis.__whKey = key;
+  return key;
+}
+
+async function webhookSecretFor(env, username) {
+  const raw = new TextEncoder().encode(await getWebhookKey(env));
+  const key = await crypto.subtle.importKey('raw', raw, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode('tg-webhook:' + String(username).toLowerCase()));
+  return [...new Uint8Array(sig)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** مهاجرت تدریجی وب‌هوک کاربران قدیمی به حالت امن (حداکثر چند کاربر در هر اجرای کران) */
+async function secureWebhooks(env, limit = 3) {
+  const list = (await env.KV.get('users_list', 'json')) || [];
+  globalThis.__whTried = globalThis.__whTried || new Map();
+  let done = 0;
+  for (const un of list) {
+    if (done >= limit) break;
+    const tried = globalThis.__whTried.get(un) || 0;
+    if (Date.now() - tried < 6 * 3600 * 1000) continue;
+    const u = await env.KV.get('user:' + un, 'json');
+    const bot = u && u.telegram && u.telegram.bot;
+    if (!bot || !bot.token || bot.webhookSecured) continue;
+    done++;
+    globalThis.__whTried.set(un, Date.now());
+    try {
+      const info = await (await fetch('https://api.telegram.org/bot' + bot.token + '/getWebhookInfo')).json();
+      const current = info && info.ok && info.result && info.result.url;
+      if (!current || !current.includes('/api/bot-webhook/')) continue;
+      const res = await fetch('https://api.telegram.org/bot' + bot.token + '/setWebhook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: current, secret_token: await webhookSecretFor(env, un), allowed_updates: ['message', 'edited_message', 'callback_query'] })
+      });
+      if (res.ok) {
+        bot.webhookSecured = true;
+        await env.KV.put('user:' + un, JSON.stringify(u));
+      }
+    } catch (_) { /* تلاش بعدی ۶ ساعت دیگر */ }
+  }
+}
+
 async function getAuthUser(request, env) {
   initEnvStorage(env);
   const authHeader = request.headers.get('Authorization') || '';
@@ -425,7 +478,7 @@ let activeUsersETag = null;
 let cachedPanelHtml = null;
 let cachedAdminHtml = null;
 let cachedWizardHtml = null;
-const STATIC_ASSET_ETAG = '"arizo-v4.6.1-features-popup"';
+const STATIC_ASSET_ETAG = '"arizo-v4.6.2-security"';
 let cachedFaviconResponse = null;
 
 export default {
@@ -1563,6 +1616,7 @@ export default {
           verifiedWebhooks.set(botTok, Date.now());
           const hostUrl = new URL(request.url).origin;
           const expectedWebhook = `${hostUrl}/api/bot-webhook/${encodeURIComponent(auth.username)}`;
+          const whSecret = await webhookSecretFor(env, auth.username);
           fetch(`https://api.telegram.org/bot${botTok}/getWebhookInfo`)
             .then(r => r.json())
             .then(info => {
@@ -1572,6 +1626,7 @@ export default {
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     url: expectedWebhook,
+                    secret_token: whSecret,
                     allowed_updates: ['message', 'edited_message', 'callback_query']
                   })
                 }).catch(() => {});
@@ -2680,15 +2735,17 @@ export default {
         // تنظیم خودکار وب‌هوک روی سرور Cloudflare جهت دریافت رویدادها و دستورات ربات
         const hostUrl = new URL(request.url).origin;
         const webhookUrl = `${hostUrl}/api/bot-webhook/${encodeURIComponent(auth.username)}`;
-        await fetch(`https://api.telegram.org/bot${cleanToken}/setWebhook`, {
+        const whRes = await fetch(`https://api.telegram.org/bot${cleanToken}/setWebhook`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             url: webhookUrl,
+            secret_token: await webhookSecretFor(env, auth.username),
             drop_pending_updates: true,
             allowed_updates: ['message', 'edited_message', 'callback_query']
           })
-        }).catch(() => {});
+        }).catch(() => null);
+        const webhookSecured = !!(whRes && whRes.ok);
 
         // تنظیم دکمه Menu Button به عنوان Web App تلگرام
         await fetch(`https://api.telegram.org/bot${cleanToken}/setChatMenuButton`, {
@@ -2727,6 +2784,7 @@ export default {
         auth.user.telegram.bot.username = botUser.username;
         auth.user.telegram.bot.name = botUser.first_name || botUser.username;
         auth.user.telegram.bot.id = botUser.id.toString();
+        auth.user.telegram.bot.webhookSecured = webhookSecured;
         // قفل انحصاری فوری مالکیت ربات به شناسه تلگرام کاربر (در صورت وجود)
         if (auth.user.telegram.userId) {
           auth.user.telegram.bot.ownerId = String(auth.user.telegram.userId);
@@ -3138,6 +3196,15 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
           u = await env.KV.get('user:' + targetUsername.toLowerCase(), 'json');
         }
         if (!u || !u.telegram?.bot?.token) return new Response('OK');
+
+        // 🔐 آپدیت‌ها فقط وقتی معتبرند که توکن امنیتی تلگرام را همراه داشته باشند
+        if (u.telegram.bot.webhookSecured) {
+          const givenSecret = request.headers.get('X-Telegram-Bot-Api-Secret-Token') || '';
+          const expectedSecret = await webhookSecretFor(env, u.username || targetUsername);
+          if (!givenSecret || !(await timingSafeStringCompare(givenSecret, expectedSecret))) {
+            return new Response('Forbidden', { status: 403 });
+          }
+        }
 
         const actualBotToken = u.telegram?.bot?.token;
         const hostUrl = new URL(request.url).origin;
@@ -5264,6 +5331,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
   // ==========================================
   async scheduled(event, env, ctx) {
     initEnvStorage(env);
+    ctx.waitUntil(secureWebhooks(env).catch(() => {}));
     ctx.waitUntil((async () => {
       try {
         // ۱. بررسی زنده بودن رانر در حافظه ایزولیت (اگر در ۵ دقیقه اخیر فعال بوده، پردازش کرون فوراً متوقف می‌شود)
