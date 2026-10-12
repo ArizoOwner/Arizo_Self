@@ -350,6 +350,29 @@
 
 </div>
 
+<div align="center">
+
+<img src="./assets/architecture.svg" alt="معماری سامانه Arizo Self" width="100%"/>
+
+<br/>
+
+<img src="./assets/flow-strip.svg" alt="مسیر داده از شما تا تلگرام" width="100%"/>
+
+</div>
+
+<div dir="rtl">
+
+| لایه | وظیفه | ویژگی کلیدی |
+|:--|:--|:--|
+| ☁️ **لبهٔ Cloudflare** | API، استودیو وب، مینی‌اپ و وب‌هوک | داده هر کاربر در گاوصندوق جداگانه (AES‑256)، هانی‌پات و بن خودکار |
+| 🔄 **موتور ۲۴ ساعته** | رانر GitHub Actions یا VPS | همگام‌سازی هر ۱۰ ثانیه، سوکت‌های گرم، حافظهٔ ضد حذف/ویرایش |
+| 📱 **تلگرام** | حساب شما، دیتاسنتر رسمی و ربات دستیار | MTProto 2.0 با تأخیر زیر ۴۰ میلی‌ثانیه |
+
+</div>
+
+<details>
+<summary>🔬 نمودار دقیق (Mermaid) · برای مشاهدهٔ جزئیات باز کنید</summary>
+
 ```mermaid
 graph TD
     subgraph "🌐 لایه پردازش ابری (Cloudflare Edge)"
@@ -390,6 +413,9 @@ graph TD
     style BOT fill:#0088cc,stroke:#0088cc,color:#fff
     style USER fill:#0ea5e9,stroke:#0ea5e9,color:#fff
 ```
+
+</details>
+
 
 ---
 
