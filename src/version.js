@@ -1,12 +1,13 @@
 // منبع یگانهٔ نسخه: پنل، بررسی به‌روزرسانی و اسکریپت انتشار ریلیز همه از همین فایل می‌خوانند.
 // برای انتشار نسخهٔ جدید فقط APP_BUILD (و در صورت نیاز APP_VERSION و یادداشت‌ها) را بالا ببرید.
 export const APP_NAME = 'Arizo Self';
-export const APP_VERSION = '3.6.4';
+export const APP_VERSION = '3.6.5';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026102602;
+export const APP_BUILD = 2026102603;
 
 export const RELEASE_NOTES = {
   fa: [
+    'رفع مشکل روشن نشدن سوییچ سکوت در پنل؛ وضعیت سوییچ دقیقاً همان‌طور که تنظیم می‌کنید ذخیره و نمایش داده می‌شود',
     'پیش‌نمایش زندهٔ نمایه حالا نام واقعی حساب تلگرامِ متصل را نشان می‌دهد، نه نام کاربری پنل',
     'رفع کامل سکوت (.mute/.unmute): تغییرات دیگر با همگام‌سازی دقیقه‌ای پاک نمی‌شود، .unmute با یوزرنیم آیدی را هم حذف می‌کند و سوییچ سکوت پنل واقعاً خاموش می‌کند',
     'دستور جدید .mutelist و پشتیبانی از .mute در پیوی بدون ریپلای؛ جلوگیری از سکوت اشتباه خودتان',
@@ -18,6 +19,7 @@ export const RELEASE_NOTES = {
     'ویزارد روی Worker دیپلوی‌شده فقط «راه‌اندازی» می‌کند و دیتابیس‌های موجود را دوباره استفاده می‌کند'
   ],
   en: [
+    'Fixed the mute switch not staying on in the panel; its state is now saved and shown exactly as you set it',
     'The live profile preview now shows the connected Telegram account\'s real name instead of the panel username',
     'Mute fixed end-to-end: .mute/.unmute survive the minute sync, .unmute by username also clears the resolved ID, and the panel mute switch really turns it off',
     'New .mutelist command and .mute in a private chat without reply; you can no longer accidentally mute yourself',
