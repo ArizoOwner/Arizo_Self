@@ -121,6 +121,61 @@ function cleanMuteTarget(raw) {
   return str.trim();
 }
 
+// ==========================================
+// 🧷 تغییرات محلی دستورات تلگرامی (.mute/.ghost/.ai/.watch)
+// ورکر لیست کاربران را تا ۶۰ ثانیه کش می‌کند و KV هم تا حدود یک دقیقه مقدار قدیمی برمی‌گرداند؛
+// بدون این لایه، همگام‌سازی دقیقه‌ای تغییر تازهٔ کاربر را با دادهٔ قدیمی سرور پاک می‌کرد.
+// ==========================================
+const PENDING_TTL_MS = 3 * 60 * 1000;
+const pendingOverrides = new Map(); // username -> { until, mutedUsers?, features? }
+
+function recordPendingOverride(username, patch) {
+  if (!username) return;
+  const prev = pendingOverrides.get(username) || {};
+  const next = { ...prev, until: Date.now() + PENDING_TTL_MS };
+  if (patch.mutedUsers) next.mutedUsers = [...patch.mutedUsers];
+  if (patch.features) next.features = { ...(prev.features || {}), ...patch.features };
+  pendingOverrides.set(username, next);
+}
+
+function sameMuteList(a, b) {
+  const norm = l => [...new Set((Array.isArray(l) ? l : []).map(cleanMuteTarget).filter(Boolean))].sort().join(',');
+  return norm(a) === norm(b);
+}
+
+/** اعمال تغییرات محلی تأییدنشده روی تنظیمات تازهٔ سرور؛ وقتی سرور به‌روز شد یا مهلت گذشت حذف می‌شود */
+function applyPendingOverrides(username, entry, serverUser) {
+  const ov = pendingOverrides.get(username);
+  if (!ov || !entry || !entry.settings) return;
+  if (Date.now() > ov.until) { pendingOverrides.delete(username); return; }
+  let stillPending = false;
+  if (ov.mutedUsers) {
+    if (sameMuteList(ov.mutedUsers, serverUser && serverUser.mutedUsers)) {
+      delete ov.mutedUsers;
+    } else {
+      stillPending = true;
+      entry.settings.mutedUsers = [...ov.mutedUsers];
+      if (ov.mutedUsers.length > 0) entry.settings.muteEnabled = true;
+      entry.localMutedUsers = new Set(ov.mutedUsers.map(cleanMuteTarget).filter(Boolean));
+    }
+  }
+  if (ov.features) {
+    for (const [k, v] of Object.entries(ov.features)) {
+      const serverVal = serverUser ? serverUser[k] : undefined;
+      const sv = k === 'watchAlerts' ? (serverVal && serverVal.rules) : serverVal;
+      const lv = k === 'watchAlerts' ? (v && v.rules) : v;
+      if (JSON.stringify(sv ?? null) === JSON.stringify(lv ?? null)) { delete ov.features[k]; continue; }
+      stillPending = true;
+      if (k === 'watchAlerts') {
+        entry.settings.watchAlerts = { ...(entry.settings.watchAlerts || {}), rules: v.rules };
+      } else {
+        entry.settings[k] = v;
+      }
+    }
+  }
+  if (!stillPending) pendingOverrides.delete(username);
+}
+
 /**
  * بررسی دقیق وضعیت اتصال کلاینت در سوکت‌های GramJS
  */
@@ -140,25 +195,16 @@ function resolveMutedUsernames(entry) {
   if (!entry || !entry.client || !isClientConnected(entry)) return;
   const list = entry.settings?.mutedUsers;
   if (!Array.isArray(list) || list.length === 0) return;
+  if (!entry.resolvedMuteIds) entry.resolvedMuteIds = new Map(); // username -> numeric id
 
   for (const raw of list) {
     const clean = cleanMuteTarget(raw);
-    if (!clean) continue;
-    // اگر آیدی عددی باشد، به لیست محلی اضافه می‌کنیم
-    if (/^-?\d+$/.test(clean)) {
-      if (entry.localMutedUsers) entry.localMutedUsers.add(clean);
-      continue;
-    }
-    // اگر یوزرنیم باشد، هویت و AccessHash آن را فعالانه استعلام و در کش کلاینت ذخیره می‌کنیم
+    if (!clean || /^-?\d+$/.test(clean) || entry.resolvedMuteIds.has(clean)) continue;
+    // یوزرنیم: شناسه عددی را جداگانه نگه می‌داریم تا لیست ذخیره‌شدهٔ کاربر دست‌کاری نشود
+    // (قبلاً آیدی به خود لیست اضافه می‌شد و .unmute با یوزرنیم، آیدی را جا می‌گذاشت)
     entry.client.getEntity(clean).then(ent => {
       if (ent && ent.id) {
-        const idStr = ent.id.toString();
-        if (!entry.settings.mutedUsers.includes(idStr)) {
-          entry.settings.mutedUsers.push(idStr);
-          console.log(`🔇 [${clean}] Resolved muted username to Telegram ID: ${idStr}`);
-        }
-        if (entry.localMutedUsers) entry.localMutedUsers.add(idStr);
-        // ذخیره قطعی در کش انتیتی و نشست حافظه جهت دسترسی فوری در پیام‌های دریافتی
+        entry.resolvedMuteIds.set(clean, ent.id.toString());
         try {
           entry.client._entityCache.add(ent);
           entry.client.session.processEntities(ent);
@@ -166,6 +212,20 @@ function resolveMutedUsernames(entry) {
       }
     }).catch(() => {});
   }
+}
+
+/** مجموعهٔ نهایی اهداف سکوت: لیست ذخیره‌شده + آیدی‌های استخراج‌شده از یوزرنیم‌ها */
+function buildMuteTargets(entry) {
+  const out = new Set();
+  const list = Array.isArray(entry?.settings?.mutedUsers) ? entry.settings.mutedUsers : [];
+  for (const raw of list) {
+    const c = cleanMuteTarget(raw);
+    if (!c) continue;
+    out.add(c);
+    const rid = entry.resolvedMuteIds && entry.resolvedMuteIds.get(c);
+    if (rid) out.add(rid);
+  }
+  return out;
 }
 
 /**
@@ -1248,8 +1308,8 @@ class TelegramConnectionPool {
           afkEnabled: !!userSettings?.afkEnabled,
           afkMessage: userSettings?.afkMessage || '',
           afkCooldown: userSettings?.afkCooldown ?? 10,
-          muteEnabled: !!userSettings?.muteEnabled,
-          mutedUsers: Array.isArray(userSettings?.mutedUsers) ? userSettings.mutedUsers : [],
+          muteEnabled: userSettings?.muteEnabled !== false && Array.isArray(userSettings?.mutedUsers) && userSettings.mutedUsers.length > 0,
+          mutedUsers: Array.isArray(userSettings?.mutedUsers) ? [...userSettings.mutedUsers] : [],
           antiTtlEnabled: !!userSettings?.antiTtlEnabled,
           bot: userSettings?.bot || null,
           ghostMode: !!userSettings?.ghostMode,
@@ -1333,14 +1393,14 @@ class TelegramConnectionPool {
 
     // به‌روزرسانی تنظیمات هوشمند در حافظه و ادغام لیست سکوت
     if (userSettings && entry) {
-      const serverMuted = Array.isArray(userSettings.mutedUsers) ? userSettings.mutedUsers : [];
+      const serverMuted = Array.isArray(userSettings.mutedUsers) ? [...userSettings.mutedUsers] : [];
       entry.localMutedUsers = new Set(serverMuted.map(cleanMuteTarget).filter(Boolean));
 
       entry.settings = {
         afkEnabled: !!userSettings.afkEnabled,
         afkMessage: userSettings.afkMessage || '',
         afkCooldown: userSettings.afkCooldown ?? 10,
-        muteEnabled: !!userSettings.muteEnabled || serverMuted.length > 0,
+        muteEnabled: userSettings.muteEnabled !== false && serverMuted.length > 0,
         mutedUsers: serverMuted,
         antiTtlEnabled: !!userSettings.antiTtlEnabled,
         bot: userSettings.bot || null,
@@ -1359,6 +1419,7 @@ class TelegramConnectionPool {
         aiIgnoredUsers: Array.isArray(userSettings.aiIgnoredUsers) ? userSettings.aiIgnoredUsers : [],
         watchAlerts: userSettings.watchAlerts || null
       };
+      applyPendingOverrides(username, entry, userSettings);
       resolveMutedUsernames(entry);
     }
 
@@ -1631,103 +1692,103 @@ class TelegramConnectionPool {
       }
     }
 
-    // ۱. دستورات سریع تلگرامی خود کاربر (.mute و .unmute)
+    // ۱. دستورات سریع تلگرامی خود کاربر (.mute / .unmute / .mutelist)
     if (isOut && message.text) {
       const text = message.text.trim();
-      const muteMatch = text.match(/^\.mute(?:\s+(.+))?$/i);
-      const unmuteMatch = text.match(/^\.unmute(?:\s+(.+))?$/i);
+      const muteMatch = text.match(/^\.mute(?:\s+([\s\S]+))?$/i);
+      const unmuteMatch = text.match(/^\.unmute(?:\s+([\s\S]+))?$/i);
+      const muteListMatch = /^\.(?:mutelist|mutes|mute\s+list)$/i.test(text);
 
-      if (muteMatch) {
+      const replyNotice = async (msg) => {
+        await message.edit({ text: msg }).catch(() => {});
+        setTimeout(() => message.delete({ revoke: true }).catch(() => {}), 6000);
+      };
+
+      if (muteListMatch) {
+        const list = Array.isArray(entry.settings.mutedUsers) ? entry.settings.mutedUsers : [];
+        const state = entry.settings.muteEnabled ? 'فعال' : 'غیرفعال';
+        await replyNotice(list.length
+          ? `🔇 لیست سکوت (${list.length} مورد، وضعیت: ${state}):\n${list.slice(0, 50).map(x => `• ${x}`).join('\n')}`
+          : '🔇 لیست سکوت خالی است.');
+        return;
+      }
+
+      if (muteMatch || unmuteMatch) {
+        const isMute = Boolean(muteMatch);
+        const arg = ((isMute ? muteMatch[1] : unmuteMatch[1]) || '').trim();
         let targetId = null;
         let targetUsername = null;
-        let targetLabel = '';
 
-        if (message.replyTo) {
+        if (arg) {
+          // آرگومان صریح اولویت دارد: آیدی عددی، @یوزرنیم یا لینک t.me
+          const clean = cleanMuteTarget(arg.split(/\s+/)[0]);
+          if (/^-?\d+$/.test(clean)) targetId = clean;
+          else if (/^[a-z][a-z0-9_]{3,31}$/.test(clean)) targetUsername = clean;
+        } else if (message.replyTo) {
           const repliedMsg = await message.getReplyMessage().catch(() => null);
           if (repliedMsg) {
-            targetId = (repliedMsg.senderId || repliedMsg.fromId?.userId || repliedMsg.peerId?.userId)?.toString();
+            const rid = (repliedMsg.senderId || repliedMsg.fromId?.userId || repliedMsg.fromId?.channelId)?.toString();
+            if (rid) targetId = rid;
             const repSender = await repliedMsg.getSender().catch(() => null);
             if (repSender?.username) targetUsername = repSender.username.toLowerCase();
-            targetLabel = targetUsername ? `@${targetUsername} (${targetId || 'ID'})` : (targetId || 'کاربر');
           }
-        } else if (muteMatch[1]) {
-          const arg = muteMatch[1].trim();
-          targetLabel = arg;
-          if (/^-?\d+$/.test(arg)) {
-            targetId = arg;
-          } else {
-            targetUsername = cleanMuteTarget(arg);
-          }
+        } else if (isPrivateChat) {
+          // در پیوی بدون ریپلای: مخاطب همین چت
+          targetId = getChatPartnerId(message, myId);
         }
 
-        if (targetId || targetUsername) {
+        if (targetId && myId && targetId === String(myId)) {
+          await replyNotice('⚠️ نمی‌توانید خودتان را بی‌صدا کنید. روی پیام شخص مقابل ریپلای کنید.');
+          return;
+        }
+        if (!targetId && !targetUsername) {
+          await replyNotice(isMute
+            ? '⚠️ هدف مشخص نیست. روی پیام فرد ریپلای کنید یا بنویسید: .mute @username یا .mute 123456'
+            : '⚠️ هدف مشخص نیست. روی پیام فرد ریپلای کنید یا بنویسید: .unmute @username یا .unmute 123456');
+          return;
+        }
+
+        const targetLabel = targetUsername ? `@${targetUsername}${targetId ? ` (${targetId})` : ''}` : targetId;
+        const current = Array.isArray(entry.settings.mutedUsers) ? [...entry.settings.mutedUsers] : [];
+        if (!entry.resolvedMuteIds) entry.resolvedMuteIds = new Map();
+
+        if (isMute) {
+          const have = new Set(current.map(cleanMuteTarget));
+          if (targetId && !have.has(targetId)) current.push(targetId);
+          if (targetUsername && !have.has(targetUsername)) current.push(`@${targetUsername}`);
+          if (targetUsername && targetId) entry.resolvedMuteIds.set(targetUsername, targetId);
+          entry.settings.mutedUsers = current;
           entry.settings.muteEnabled = true;
-          if (!entry.localMutedUsers) entry.localMutedUsers = new Set();
-          
-          if (targetId) {
-            if (!entry.settings.mutedUsers.includes(targetId)) entry.settings.mutedUsers.push(targetId);
-            entry.localMutedUsers.add(targetId);
-          }
-          if (targetUsername) {
-            const atUsername = `@${targetUsername}`;
-            if (!entry.settings.mutedUsers.includes(atUsername) && !entry.settings.mutedUsers.includes(targetUsername)) {
-              entry.settings.mutedUsers.push(atUsername);
-            }
-            entry.localMutedUsers.add(atUsername);
-          }
-
-          syncUserMuteToCloudflare(username, entry.settings.mutedUsers).catch(() => {});
+          entry.localMutedUsers = new Set(current.map(cleanMuteTarget).filter(Boolean));
           resolveMutedUsernames(entry);
-
-          await message.edit({ text: `🔇 کاربر [${targetLabel}] به لیست سکوت سلف‌بات اضافه شد.` }).catch(() => {});
-          setTimeout(() => message.delete({ revoke: true }).catch(() => {}), 3500);
-          return;
-        }
-      } else if (unmuteMatch) {
-        let targetId = null;
-        let targetUsername = null;
-        let targetLabel = '';
-
-        if (message.replyTo) {
-          const repliedMsg = await message.getReplyMessage().catch(() => null);
-          if (repliedMsg) {
-            targetId = (repliedMsg.senderId || repliedMsg.fromId?.userId || repliedMsg.peerId?.userId)?.toString();
-            const repSender = await repliedMsg.getSender().catch(() => null);
-            if (repSender?.username) targetUsername = repSender.username.toLowerCase();
-            targetLabel = targetUsername ? `@${targetUsername} (${targetId || 'ID'})` : (targetId || 'کاربر');
-          }
-        } else if (unmuteMatch[1]) {
-          const arg = unmuteMatch[1].trim();
-          targetLabel = arg;
-          if (/^-?\d+$/.test(arg)) {
-            targetId = arg;
-          } else {
-            targetUsername = cleanMuteTarget(arg);
-          }
-        }
-
-        if (targetId || targetUsername) {
-          const targetsToRemove = new Set();
-          if (targetId) targetsToRemove.add(targetId);
+          syncUserMuteToCloudflare(username, current).catch(() => {});
+          console.log(`🔇 [${username}] .mute added a target (total ${current.length})`);
+          await replyNotice(`🔇 کاربر [${targetLabel}] به لیست سکوت اضافه شد؛ پیام‌های بعدی او خودکار حذف می‌شوند.`);
+        } else {
+          // حذف هم یوزرنیم و هم آیدی عددی متناظر (از ریپلای یا کش استخراج)
+          const remove = new Set();
+          if (targetId) remove.add(targetId);
           if (targetUsername) {
-            targetsToRemove.add(targetUsername);
-            targetsToRemove.add(`@${targetUsername}`);
+            remove.add(targetUsername);
+            const rid = entry.resolvedMuteIds.get(targetUsername);
+            if (rid) remove.add(rid);
           }
-
-          entry.settings.mutedUsers = entry.settings.mutedUsers.filter(id => {
-            const clean = cleanMuteTarget(id);
-            return !targetsToRemove.has(id) && !targetsToRemove.has(clean);
-          });
-          if (entry.localMutedUsers) {
-            for (const t of targetsToRemove) entry.localMutedUsers.delete(t);
+          if (targetId) {
+            for (const [uname, rid] of entry.resolvedMuteIds) if (rid === targetId) remove.add(uname);
           }
-
-          syncUserMuteToCloudflare(username, entry.settings.mutedUsers).catch(() => {});
-
-          await message.edit({ text: `🔊 کاربر [${targetLabel}] از لیست سکوت خارج شد.` }).catch(() => {});
-          setTimeout(() => message.delete({ revoke: true }).catch(() => {}), 3500);
-          return;
+          const next = current.filter(x => !remove.has(cleanMuteTarget(x)));
+          for (const r of remove) entry.resolvedMuteIds.delete(r);
+          const changed = next.length !== current.length;
+          entry.settings.mutedUsers = next;
+          entry.localMutedUsers = new Set(next.map(cleanMuteTarget).filter(Boolean));
+          if (next.length === 0) entry.settings.muteEnabled = false;
+          syncUserMuteToCloudflare(username, next).catch(() => {});
+          console.log(`🔊 [${username}] .unmute removed ${current.length - next.length} target(s)`);
+          await replyNotice(changed
+            ? `🔊 کاربر [${targetLabel}] از لیست سکوت خارج شد.`
+            : `ℹ️ کاربر [${targetLabel}] در لیست سکوت نبود.`);
         }
+        return;
       }
     }
 
@@ -2098,9 +2159,8 @@ class TelegramConnectionPool {
     }
 
     // ۳. 🔇 سکوت و حذف خودکار پیام (Mute)
-    const hasMutedUsers = Array.isArray(entry.settings.mutedUsers) && entry.settings.mutedUsers.length > 0;
-    const hasLocalMuted = entry.localMutedUsers && entry.localMutedUsers.size > 0;
-    if ((entry.settings.muteEnabled || hasMutedUsers || hasLocalMuted) && !isOut) {
+    const muteTargets = entry.settings.muteEnabled ? buildMuteTargets(entry) : new Set();
+    if (muteTargets.size > 0 && !isOut) {
       // جمع‌آوری کلیه شناسه‌های عددی فرستنده
       const senderIds = new Set();
       if (message.senderId) senderIds.add(cleanMuteTarget(message.senderId));
@@ -2153,20 +2213,8 @@ class TelegramConnectionPool {
         } catch (_) {}
       }
 
-      // ساخت لیست یکپارچه از اهداف سکوت (ترکیب تنظیمات سرور و محلی)
-      const allMutedTargets = new Set();
-      if (Array.isArray(entry.settings.mutedUsers)) {
-        for (const raw of entry.settings.mutedUsers) {
-          const c = cleanMuteTarget(raw);
-          if (c) allMutedTargets.add(c);
-        }
-      }
-      if (entry.localMutedUsers) {
-        for (const raw of entry.localMutedUsers) {
-          const c = cleanMuteTarget(raw);
-          if (c) allMutedTargets.add(c);
-        }
-      }
+      // اهداف سکوت: فقط لیست فعلی (سرور + تغییرات تأییدنشدهٔ محلی) به‌علاوه آیدی‌های استخراج‌شده
+      const allMutedTargets = muteTargets;
 
       let isMuted = false;
       let matchedTarget = null;
@@ -2949,14 +2997,14 @@ async function syncUserSettings(usersList) {
         entry.client.invoke(new Api.updates.GetState()).catch(() => {});
       }
 
-      const serverMuted = Array.isArray(u.mutedUsers) ? u.mutedUsers : [];
+      const serverMuted = Array.isArray(u.mutedUsers) ? [...u.mutedUsers] : [];
       entry.localMutedUsers = new Set(serverMuted.map(cleanMuteTarget).filter(Boolean));
 
       entry.settings = {
         afkEnabled: !!u.afkEnabled,
         afkMessage: u.afkMessage || '',
         afkCooldown: u.afkCooldown ?? 10,
-        muteEnabled: !!u.muteEnabled || serverMuted.length > 0,
+        muteEnabled: u.muteEnabled !== false && serverMuted.length > 0,
         mutedUsers: serverMuted,
         antiTtlEnabled: !!u.antiTtlEnabled,
         bot: u.bot || null,
@@ -2970,8 +3018,10 @@ async function syncUserSettings(usersList) {
         aiContext: u.aiContext || '',
         aiMaxReplies: u.aiMaxReplies ?? 3,
         aiCooldown: u.aiCooldown ?? 5,
-        aiIgnoredUsers: Array.isArray(u.aiIgnoredUsers) ? u.aiIgnoredUsers : []
+        aiIgnoredUsers: Array.isArray(u.aiIgnoredUsers) ? u.aiIgnoredUsers : [],
+        watchAlerts: u.watchAlerts || null
       };
+      applyPendingOverrides(u.username, entry, u);
       resolveMutedUsernames(entry);
 
       const nowTs = Date.now();
@@ -3018,17 +3068,25 @@ async function reportStatusErrors(updates) {
  * همگام‌سازی آنی لیست سکوت کاربر در ورکر کلادفلر
  */
 async function syncUserMuteToCloudflare(username, mutedUsers) {
-  try {
-    await fetch(`${CLOUDFLARE_URL}/api/internal/update-user-mute`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RUNNER_SECRET}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
-      },
-      body: JSON.stringify({ username, mutedUsers })
-    });
-  } catch (_) {}
+  recordPendingOverride(username, { mutedUsers });
+  if (!username || !CLOUDFLARE_URL) return;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${CLOUDFLARE_URL}/api/internal/update-user-mute`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RUNNER_SECRET}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
+        },
+        body: JSON.stringify({ username, mutedUsers })
+      });
+      if (res.ok) return;
+      console.warn(`⚠️ [${username}] Mute sync HTTP ${res.status}`);
+    } catch (e) {
+      console.warn(`⚠️ [${username}] Mute sync failed:`, e.message);
+    }
+  }
 }
 
 /**
@@ -3036,17 +3094,24 @@ async function syncUserMuteToCloudflare(username, mutedUsers) {
  */
 async function syncUserFeatureToCloudflare(username, features) {
   if (!username || !CLOUDFLARE_URL) return;
-  try {
-    await fetch(`${CLOUDFLARE_URL}/api/internal/update-user-feature`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RUNNER_SECRET}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
-      },
-      body: JSON.stringify({ username, ...features })
-    });
-  } catch (_) {}
+  recordPendingOverride(username, { features });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`${CLOUDFLARE_URL}/api/internal/update-user-feature`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${RUNNER_SECRET}`,
+          'Content-Type': 'application/json',
+          'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
+        },
+        body: JSON.stringify({ username, ...features })
+      });
+      if (res.ok) return;
+      console.warn(`⚠️ [${username}] Feature sync HTTP ${res.status}`);
+    } catch (e) {
+      console.warn(`⚠️ [${username}] Feature sync failed:`, e.message);
+    }
+  }
 }
 
 /**
