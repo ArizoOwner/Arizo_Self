@@ -1352,7 +1352,7 @@ class TelegramConnectionPool {
         const me = await client.getMe();
         if (me && me.id) {
           entry.myId = me.id.toString();
-          syncOwnerTgIdToCloudflare(username, entry.myId, me);
+          syncOwnerTgIdToCloudflare(username, entry.myId, me, client);
           const now = Date.now();
           if (me.status instanceof Api.UserStatusOnline || me.status?.className === 'UserStatusOnline') {
             entry.isSelfOnline = true;
@@ -1384,7 +1384,7 @@ class TelegramConnectionPool {
           const me = await entry.client.getMe();
           if (me && me.id) {
             entry.myId = me.id.toString();
-            syncOwnerTgIdToCloudflare(username, entry.myId, me);
+            syncOwnerTgIdToCloudflare(username, entry.myId, me, entry.client);
           }
         }
       } catch (_) {}
@@ -3022,6 +3022,13 @@ async function syncUserSettings(usersList) {
         watchAlerts: u.watchAlerts || null
       };
       applyPendingOverrides(u.username, entry, u);
+      // بازبینی نام و عکس پروفایل تلگرام هر ۳۰ دقیقه
+      if (entry.client && isClientConnected(entry) && Date.now() - (entry.lastProfileCheck || 0) > 1800000) {
+        entry.lastProfileCheck = Date.now();
+        entry.client.getMe().then(me => {
+          if (me && me.id) syncOwnerTgIdToCloudflare(u.username, me.id.toString(), me, entry.client);
+        }).catch(() => {});
+      }
       resolveMutedUsernames(entry);
 
       const nowTs = Date.now();
@@ -3115,9 +3122,39 @@ async function syncUserFeatureToCloudflare(username, features) {
 }
 
 /**
+ * ارسال عکس پروفایل کوچک حساب تلگرام به ورکر (فقط وقتی عکس تغییر کرده باشد)
+ */
+const lastPhotoSent = new Map(); // username -> photoId
+async function syncOwnerPhotoToCloudflare(username, client, me) {
+  if (!username || !client || !me || !CLOUDFLARE_URL) return;
+  const photoId = me.photo && me.photo.photoId ? me.photo.photoId.toString() : '';
+  if (lastPhotoSent.get(username) === photoId) return;
+  let photoBase64 = '';
+  if (photoId) {
+    const buf = await client.downloadProfilePhoto(me, { isBig: false }).catch(() => null);
+    if (!buf || !buf.length || buf.length > 250 * 1024) return;
+    photoBase64 = Buffer.from(buf).toString('base64');
+  }
+  const res = await fetch(`${CLOUDFLARE_URL}/api/internal/set-user-tg-photo`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${RUNNER_SECRET}`,
+      'Content-Type': 'application/json',
+      'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
+    },
+    body: JSON.stringify({ username, photoBase64, photoId })
+  }).catch(() => null);
+  if (res && res.ok) {
+    lastPhotoSent.set(username, photoId);
+    console.log(`🖼️ [${username}] Profile photo synced${photoId ? '' : ' (removed)'}.`);
+  }
+}
+
+/**
  * همگام‌سازی فوری شناسه عددی تلگرام کاربر با ورکر جهت قفل انحصاری امنیتی ربات به مالک
  */
-async function syncOwnerTgIdToCloudflare(username, tgUserId, me = null) {
+async function syncOwnerTgIdToCloudflare(username, tgUserId, me = null, client = null) {
+  if (client && me) syncOwnerPhotoToCloudflare(username, client, me).catch(() => {});
   if (!username || !tgUserId || !CLOUDFLARE_URL) return;
   // نام کوچک واقعی حساب تلگرام (نام خانوادگی توسط ساعت بازنویسی می‌شود) برای پیش‌نمایش پنل
   const tgFirstName = me && me.firstName ? String(me.firstName) : undefined;
