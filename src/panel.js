@@ -10817,14 +10817,21 @@ export function panelHTML(env, options = {}) {
             }
           }
 
-          // 📱 به‌روزرسانی شبیه‌ساز زنده پروفایل تلگرام
+          // 📱 به‌روزرسانی شبیه‌ساز زنده پروفایل تلگرام — نام واقعی حساب تلگرامِ متصل (نه نام کاربری پنل)
+          var tgDisplayName = (data.tgFirstName || '').trim() || (data.tgUsername ? '@' + data.tgUsername : '');
           var mockupFirstEl = document.getElementById('mockupFirstName');
           if (mockupFirstEl) {
-            mockupFirstEl.textContent = data.username || 'کاربر Arizo';
+            if (tgDisplayName) {
+              mockupFirstEl.removeAttribute('data-i18n');
+              mockupFirstEl.textContent = tgDisplayName;
+            } else {
+              mockupFirstEl.textContent = data.hasTelegram ? 'حساب تلگرام' : 'کاربر Arizo';
+            }
           }
           var mockupAvatarEl = document.getElementById('mockupAvatar');
           if (mockupAvatarEl) {
-            var initial = (data.username || 'AZ').slice(0, 2).toUpperCase();
+            var initialSrc = (data.tgFirstName || data.tgUsername || 'AZ').trim();
+            var initial = Array.from(initialSrc).slice(0, 2).join('').toUpperCase();
             mockupAvatarEl.textContent = initial;
           }
 
