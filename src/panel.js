@@ -10832,7 +10832,35 @@ export function panelHTML(env, options = {}) {
           if (mockupAvatarEl) {
             var initialSrc = (data.tgFirstName || data.tgUsername || 'AZ').trim();
             var initial = Array.from(initialSrc).slice(0, 2).join('').toUpperCase();
-            mockupAvatarEl.textContent = initial;
+            if (data.tgPhotoId) {
+              if (mockupAvatarEl.getAttribute('data-photo-id') !== data.tgPhotoId) {
+                mockupAvatarEl.setAttribute('data-photo-id', data.tgPhotoId);
+                var photoId = data.tgPhotoId;
+                fetch('/api/user/tg-photo?v=' + encodeURIComponent(photoId), { headers: { 'Authorization': 'Bearer ' + getAuthToken() } })
+                  .then(function (r) { if (!r.ok) throw new Error('no photo'); return r.blob(); })
+                  .then(function (blob) {
+                    return new Promise(function (res, rej) {
+                      var fr = new FileReader();
+                      fr.onload = function () { res(fr.result); };
+                      fr.onerror = rej;
+                      fr.readAsDataURL(blob);
+                    });
+                  })
+                  .then(function (dataUrl) {
+                    if (mockupAvatarEl.getAttribute('data-photo-id') !== photoId) return;
+                    var img = new Image();
+                    img.alt = '';
+                    img.style.cssText = 'width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;';
+                    img.src = dataUrl;
+                    mockupAvatarEl.textContent = '';
+                    mockupAvatarEl.appendChild(img);
+                  })
+                  .catch(function () { mockupAvatarEl.removeAttribute('data-photo-id'); mockupAvatarEl.textContent = initial; });
+              }
+            } else {
+              mockupAvatarEl.removeAttribute('data-photo-id');
+              mockupAvatarEl.textContent = initial;
+            }
           }
 
           window.lastServerUpdateTime = data.status?.lastUpdate || 0;
