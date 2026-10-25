@@ -9621,7 +9621,7 @@ export function panelHTML(env, options = {}) {
           afkEnabled: document.getElementById('afkEnabledToggle') ? document.getElementById('afkEnabledToggle').checked : false,
           afkMessage: (document.getElementById('afkMessageInput') && document.getElementById('afkMessageInput').value) || '',
           afkCooldown: document.getElementById('afkCooldownSelect') ? parseInt(document.getElementById('afkCooldownSelect').value, 10) : 10,
-          muteEnabled: hasMutedUsers ? true : muteToggleChecked,
+          muteEnabled: hasMutedUsers ? muteToggleChecked : false,
           mutedUsers: rawMutedUsers,
           antiTtlEnabled: document.getElementById('botForwardTtlToggle') ? document.getElementById('botForwardTtlToggle').checked : true,
           // 👻 Ghost Mode
@@ -10740,7 +10740,7 @@ export function panelHTML(env, options = {}) {
 
             // 🔇 بارگذاری سکوت و حذف پیام (Mute)
             var hasSavedMuted = Array.isArray(data.mutedUsers) ? (data.mutedUsers.length > 0) : Boolean(data.mutedUsers && data.mutedUsers.trim());
-            setSafeChecked('muteEnabledToggle', !!data.muteEnabled || hasSavedMuted);
+            setSafeChecked('muteEnabledToggle', data.muteEnabled !== false && hasSavedMuted);
             setSafeValue('mutedUsersInput', Array.isArray(data.mutedUsers) ? data.mutedUsers.join(', ') : (data.mutedUsers || ''));
 
             // 👻 بارگذاری حالت شبح (Ghost Mode)
