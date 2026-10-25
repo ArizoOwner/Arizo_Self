@@ -1711,7 +1711,7 @@ export default {
         afkEnabled: !!auth.user.telegram?.afkEnabled,
         afkMessage: auth.user.telegram?.afkMessage || '',
         afkCooldown: auth.user.telegram?.afkCooldown ?? 10,
-        muteEnabled: !!auth.user.telegram?.muteEnabled || (Array.isArray(auth.user.telegram?.mutedUsers) && auth.user.telegram.mutedUsers.length > 0),
+        muteEnabled: auth.user.telegram?.muteEnabled !== false && Array.isArray(auth.user.telegram?.mutedUsers) && auth.user.telegram.mutedUsers.length > 0,
         mutedUsers: auth.user.telegram?.mutedUsers || [],
         antiTtlEnabled: !!(auth.user.telegram?.antiTtlEnabled ?? auth.user.antiTtlEnabled),
         // 👻 Ghost Mode
@@ -2516,7 +2516,7 @@ export default {
             afkEnabled: !!u.telegram.afkEnabled,
             afkMessage: u.telegram.afkMessage || '',
             afkCooldown: u.telegram.afkCooldown ?? 10,
-            muteEnabled: !!u.telegram.muteEnabled || (Array.isArray(u.telegram.mutedUsers) && u.telegram.mutedUsers.length > 0),
+            muteEnabled: u.telegram.muteEnabled !== false && Array.isArray(u.telegram.mutedUsers) && u.telegram.mutedUsers.length > 0,
             mutedUsers: u.telegram.mutedUsers || [],
             antiTtlEnabled: !!(u.telegram.antiTtlEnabled ?? u.antiTtlEnabled),
             ghostMode: !!u.telegram.ghostMode,
@@ -2591,11 +2591,17 @@ export default {
         if (username && Array.isArray(mutedUsers)) {
           const u = await env.KV.get('user:' + username, 'json');
           if (u && u.telegram) {
-            u.telegram.mutedUsers = mutedUsers.map(x => String(x).trim()).filter(Boolean);
+            const seen = new Set();
+            u.telegram.mutedUsers = mutedUsers
+              .map(x => String(x).trim().slice(0, 64))
+              .filter(x => x && !seen.has(x.toLowerCase()) && seen.add(x.toLowerCase()))
+              .slice(0, 500);
             if (u.telegram.mutedUsers.length > 0) {
               u.telegram.muteEnabled = true;
             }
             await env.KV.put('user:' + username, JSON.stringify(u));
+            activeUsersCache = null;
+            activeUsersCacheTime = 0;
           }
         }
         return json({ ok: true });
@@ -2652,6 +2658,8 @@ export default {
             if (aiIgnoredUsers !== undefined) u.telegram.aiIgnoredUsers = Array.isArray(aiIgnoredUsers) ? aiIgnoredUsers : [];
             if (aiModel !== undefined) u.telegram.aiModel = String(aiModel).trim().slice(0, 100);
             await env.KV.put('user:' + username, JSON.stringify(u));
+            activeUsersCache = null;
+            activeUsersCacheTime = 0;
           }
         }
         return json({ ok: true });
