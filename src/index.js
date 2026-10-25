@@ -1713,7 +1713,7 @@ export default {
         afkEnabled: !!auth.user.telegram?.afkEnabled,
         afkMessage: auth.user.telegram?.afkMessage || '',
         afkCooldown: auth.user.telegram?.afkCooldown ?? 10,
-        muteEnabled: auth.user.telegram?.muteEnabled !== false && Array.isArray(auth.user.telegram?.mutedUsers) && auth.user.telegram.mutedUsers.length > 0,
+        muteEnabled: auth.user.telegram?.muteEnabled === true || (auth.user.telegram?.muteEnabled !== false && Array.isArray(auth.user.telegram?.mutedUsers) && auth.user.telegram.mutedUsers.length > 0),
         mutedUsers: auth.user.telegram?.mutedUsers || [],
         antiTtlEnabled: !!(auth.user.telegram?.antiTtlEnabled ?? auth.user.antiTtlEnabled),
         // 👻 Ghost Mode
