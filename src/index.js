@@ -1696,6 +1696,8 @@ export default {
         remainingMs: sub.remainingMs ?? 0,
         isLifetime: !!sub.isLifetime,
         hasTelegram: !!auth.user.telegram?.sessionEncrypted,
+        tgFirstName: auth.user.telegram?.tgFirstName || '',
+        tgUsername: auth.user.telegram?.tgUsername || '',
         enabled: auth.user.telegram?.enabled ?? false,
         digits: auth.user.telegram?.digits,
         colon: auth.user.telegram?.colon || ':',
@@ -2616,15 +2618,21 @@ export default {
         return json({ error: 'unauthorized runner' }, 401);
       }
       try {
-        const { username, tgUserId } = await request.json();
+        const { username, tgUserId, tgFirstName, tgUsername } = await request.json();
         if (username && tgUserId) {
           const u = await env.KV.get('user:' + username, 'json');
           if (u && u.telegram) {
             const cleanId = String(tgUserId).trim();
+            const fn = typeof tgFirstName === 'string' ? tgFirstName.trim().slice(0, 64) : undefined;
+            const un = typeof tgUsername === 'string' ? tgUsername.trim().replace(/^@/, '').slice(0, 32) : undefined;
             const needsUpdate = u.telegram.userId !== cleanId ||
+              (fn !== undefined && u.telegram.tgFirstName !== fn) ||
+              (un !== undefined && u.telegram.tgUsername !== un) ||
               (u.telegram.bot && (!u.telegram.bot.ownerId || !u.telegram.bot.chatId));
             if (needsUpdate) {
               u.telegram.userId = cleanId;
+              if (fn !== undefined) u.telegram.tgFirstName = fn;
+              if (un !== undefined) u.telegram.tgUsername = un;
               if (u.telegram.bot) {
                 u.telegram.bot.ownerId = cleanId;
                 u.telegram.bot.chatId = cleanId;
