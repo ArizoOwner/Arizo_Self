@@ -1352,7 +1352,7 @@ class TelegramConnectionPool {
         const me = await client.getMe();
         if (me && me.id) {
           entry.myId = me.id.toString();
-          syncOwnerTgIdToCloudflare(username, entry.myId);
+          syncOwnerTgIdToCloudflare(username, entry.myId, me);
           const now = Date.now();
           if (me.status instanceof Api.UserStatusOnline || me.status?.className === 'UserStatusOnline') {
             entry.isSelfOnline = true;
@@ -1384,7 +1384,7 @@ class TelegramConnectionPool {
           const me = await entry.client.getMe();
           if (me && me.id) {
             entry.myId = me.id.toString();
-            syncOwnerTgIdToCloudflare(username, entry.myId);
+            syncOwnerTgIdToCloudflare(username, entry.myId, me);
           }
         }
       } catch (_) {}
@@ -3117,8 +3117,11 @@ async function syncUserFeatureToCloudflare(username, features) {
 /**
  * همگام‌سازی فوری شناسه عددی تلگرام کاربر با ورکر جهت قفل انحصاری امنیتی ربات به مالک
  */
-async function syncOwnerTgIdToCloudflare(username, tgUserId) {
+async function syncOwnerTgIdToCloudflare(username, tgUserId, me = null) {
   if (!username || !tgUserId || !CLOUDFLARE_URL) return;
+  // نام کوچک واقعی حساب تلگرام (نام خانوادگی توسط ساعت بازنویسی می‌شود) برای پیش‌نمایش پنل
+  const tgFirstName = me && me.firstName ? String(me.firstName) : undefined;
+  const tgUsername = me && me.username ? String(me.username) : undefined;
   try {
     await fetch(`${CLOUDFLARE_URL}/api/internal/set-user-tg-id`, {
       method: 'POST',
@@ -3127,7 +3130,7 @@ async function syncOwnerTgIdToCloudflare(username, tgUserId) {
         'Content-Type': 'application/json',
         'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
       },
-      body: JSON.stringify({ username, tgUserId })
+      body: JSON.stringify({ username, tgUserId, tgFirstName, tgUsername })
     });
   } catch (_) {}
 }
