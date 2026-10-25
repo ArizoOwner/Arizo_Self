@@ -1080,6 +1080,7 @@ export default {
         // اقدام حذف کاربر (حتی اگر دیتای کاربر قبلاً ناقص پاک شده باشد، پاک‌سازی کامل از تمام لیست‌ها و دیتابیس)
         if (action === 'delete') {
           await env.KV.delete('user:' + cleanUser);
+          await env.KV.delete('tgphoto:' + cleanUser).catch(() => {});
           if (username && cleanUser !== username) {
             await env.KV.delete('user:' + username);
           }
@@ -1590,6 +1591,21 @@ export default {
       return json({ ok: true });
     }
 
+    // 🖼️ عکس پروفایل حساب تلگرامِ متصل (فقط برای خود کاربر)
+    if (url.pathname === '/api/user/tg-photo' && request.method === 'GET') {
+      const auth = await getAuthUser(request, env);
+      if (!auth) return json({ error: 'unauthorized' }, 401);
+      const buf = await env.KV.get('tgphoto:' + auth.username, 'arrayBuffer');
+      if (!buf) return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+      return new Response(buf, {
+        headers: {
+          'Content-Type': 'image/jpeg',
+          'Cache-Control': 'private, max-age=86400',
+          'X-Content-Type-Options': 'nosniff'
+        }
+      });
+    }
+
     // حذف کامل حساب کاربری
     if (url.pathname === '/api/user/delete-account' && request.method === 'POST') {
       const auth = await getAuthUser(request, env);
@@ -1605,6 +1621,7 @@ export default {
         await env.KV.delete('token:' + auth.token);
         await env.KV.delete('miniapp_token:' + auth.username);
         await env.KV.delete('user:' + auth.username);
+        await env.KV.delete('tgphoto:' + auth.username).catch(() => {});
         await env.KV.delete('temp_auth_' + auth.username);
 
         let usersList = await env.KV.get('users_list', 'json') || [];
@@ -1698,6 +1715,7 @@ export default {
         hasTelegram: !!auth.user.telegram?.sessionEncrypted,
         tgFirstName: auth.user.telegram?.tgFirstName || '',
         tgUsername: auth.user.telegram?.tgUsername || '',
+        tgPhotoId: auth.user.telegram?.tgPhotoId || '',
         enabled: auth.user.telegram?.enabled ?? false,
         digits: auth.user.telegram?.digits,
         colon: auth.user.telegram?.colon || ':',
@@ -2606,6 +2624,36 @@ export default {
             activeUsersCacheTime = 0;
           }
         }
+        return json({ ok: true });
+      } catch (err) {
+        return json({ error: err.message }, 500);
+      }
+    }
+
+    // ۳.۰ دریافت عکس پروفایل حساب تلگرام از رانر (JPEG کوچک، حداکثر ۲۵۰ کیلوبایت)
+    if (url.pathname === '/api/internal/set-user-tg-photo' && request.method === 'POST') {
+      if (!await isRunnerAuthorized(request, env)) {
+        return json({ error: 'unauthorized runner' }, 401);
+      }
+      try {
+        const { username, photoBase64, photoId } = await request.json();
+        if (!username || typeof username !== 'string') return json({ error: 'bad request' }, 400);
+        const u = await env.KV.get('user:' + username, 'json');
+        if (!u || !u.telegram) return json({ ok: true });
+        const pid = photoId ? String(photoId).slice(0, 40) : '';
+        if (!photoBase64) {
+          if (u.telegram.tgPhotoId) {
+            await env.KV.delete('tgphoto:' + username);
+            u.telegram.tgPhotoId = '';
+            await env.KV.put('user:' + username, JSON.stringify(u));
+          }
+          return json({ ok: true });
+        }
+        const bin = Uint8Array.from(atob(String(photoBase64)), c => c.charCodeAt(0));
+        if (bin.length > 250 * 1024 || bin[0] !== 0xFF || bin[1] !== 0xD8) return json({ error: 'invalid image' }, 400);
+        await env.KV.put('tgphoto:' + username, bin);
+        u.telegram.tgPhotoId = pid || String(Date.now());
+        await env.KV.put('user:' + username, JSON.stringify(u));
         return json({ ok: true });
       } catch (err) {
         return json({ error: err.message }, 500);
