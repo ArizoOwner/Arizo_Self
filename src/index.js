@@ -1599,8 +1599,22 @@ export default {
     if (url.pathname === '/api/user/tg-photo' && request.method === 'GET') {
       const auth = await getAuthUser(request, env);
       if (!auth) return json({ error: 'unauthorized' }, 401);
-      const buf = await env.KV.get('tgphoto:' + auth.username, 'arrayBuffer');
-      if (!buf) return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+      // لایهٔ ذخیره‌سازی (D1/KV) فقط متن نگه می‌دارد؛ عکس به‌صورت base64 ذخیره می‌شود
+      const stored = await env.KV.get('tgphoto:' + auth.username);
+      let bin = null;
+      try {
+        if (typeof stored === 'string' && stored) {
+          if (stored.charAt(0) === '{') {
+            // سازگاری با نسخهٔ قبلی که بایت‌ها را به‌صورت JSON ذخیره می‌کرد
+            const o = JSON.parse(stored);
+            bin = Uint8Array.from(Object.keys(o).sort((a, b) => a - b).map(k => o[k]));
+          } else {
+            bin = Uint8Array.from(atob(stored), c => c.charCodeAt(0));
+          }
+        }
+      } catch (_) { bin = null; }
+      if (!bin || bin.length < 4 || bin[0] !== 0xFF || bin[1] !== 0xD8) return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+      const buf = bin;
       return new Response(buf, {
         headers: {
           'Content-Type': 'image/jpeg',
@@ -2655,7 +2669,7 @@ export default {
         }
         const bin = Uint8Array.from(atob(String(photoBase64)), c => c.charCodeAt(0));
         if (bin.length > 250 * 1024 || bin[0] !== 0xFF || bin[1] !== 0xD8) return json({ error: 'invalid image' }, 400);
-        await env.KV.put('tgphoto:' + username, bin);
+        await env.KV.put('tgphoto:' + username, String(photoBase64));
         u.telegram.tgPhotoId = pid || String(Date.now());
         await env.KV.put('user:' + username, JSON.stringify(u));
         return json({ ok: true });
