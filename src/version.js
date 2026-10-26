@@ -3,10 +3,11 @@
 export const APP_NAME = 'Arizo Self';
 export const APP_VERSION = '4.0.0';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026102702;
+export const APP_BUILD = 2026102703;
 
 export const RELEASE_NOTES = {
   fa: [
+    'به‌روزرسانی زندهٔ عکس پروفایل: تشخیص فوری تغییر عکس در تلگرام و نمایش در پنل ظرف چند ثانیه',
     'طراحی ریسپانسیو موبایل، فونت‌های یکپارچه و هماهنگ، منوهای جمع‌وجورتر ربات و نمایش ساعت/آفلاین سمت راست نام اکانت',
     'منوی فیلتر سکوت در ربات تلگرام: روشن/خاموش، افزودن، حذف تکی و پاکسازی لیست',
     'نسخهٔ نهایی ۴ پرو: شامل همهٔ رفع‌ها و قابلیت‌های قبلی (سکوت، نام و عکس پروفایل تلگرام، به‌روزرسانی هوشمند)',
@@ -26,6 +27,7 @@ export const RELEASE_NOTES = {
     'ویزارد روی Worker دیپلوی‌شده فقط «راه‌اندازی» می‌کند و دیتابیس‌های موجود را دوباره استفاده می‌کند'
   ],
   en: [
+    'Live profile photo: instant detection of photo changes in Telegram, shown in the panel within seconds',
     'Responsive mobile design, unified typography, compact bot menus, clock/offline shown to the right of the account name',
     'Mute filter menu in the Telegram bot: on/off, add, remove one, clear list',
     'Final v4 PRO: includes all previous fixes and features (mute, Telegram name and photo preview, smart updater)',
