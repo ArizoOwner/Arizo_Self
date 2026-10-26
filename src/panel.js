@@ -11029,7 +11029,7 @@ export function panelHTML(env, options = {}) {
         lastDashboardPollTime = Date.now();
         loadUserDashboard();
       }
-    }, 60000);
+    }, 20000);
 
     document.addEventListener('visibilitychange', function() {
       if (!document.hidden && getAuthToken()) {
