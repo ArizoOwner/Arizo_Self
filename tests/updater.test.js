@@ -106,6 +106,22 @@ describe('Updater — version check', () => {
     } finally { net.restore(); resetReleaseCache(); }
   });
 
+  it('should detect changed files inside the same build via the installed hash', async () => {
+    resetReleaseCache();
+    const net = mockNetwork({ build: APP_BUILD });
+    try {
+      const same = await checkForUpdate({ fresh: true });
+      const sha = same.latest.sha256;
+      resetReleaseCache();
+      const unchanged = await checkForUpdate({ fresh: true, state: { installedBuild: APP_BUILD, installedSha: sha } });
+      assertEqual(unchanged.updateAvailable, false);
+      resetReleaseCache();
+      const changed = await checkForUpdate({ fresh: true, state: { installedBuild: APP_BUILD, installedSha: 'f'.repeat(64) } });
+      assertEqual(changed.updateAvailable, true);
+      assertEqual(changed.contentChanged, true);
+    } finally { net.restore(); resetReleaseCache(); }
+  });
+
   it('should reject malformed release info instead of trusting it', async () => {
     resetReleaseCache();
     const original = globalThis.fetch;
