@@ -4,8 +4,10 @@ export function panelHTML(env, options = {}) {
 <html lang="fa" dir="rtl" data-theme="dark">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-  <title>⚡ Arizo Self | سامانه مدیریت نمایه و ابزارهای ارتباطی تلگرام</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Arizo Self | سلف‌بات هوشمند و مدیریت حساب تلگرام</title>
+  <meta name="description" content="Arizo Self — ساعت و بیوگرافی زنده، منشی خودکار، فیلتر سکوت، حالت شبح، ضدحذف و پاسخ هوشمند برای حساب تلگرام شما؛ سریع، امن و قابل مدیریت از موبایل.">
+  <meta name="theme-color" content="#070913">
   <meta name="color-scheme" content="dark light">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1182,6 +1184,8 @@ export function panelHTML(env, options = {}) {
       gap: 9px;
       flex-wrap: wrap;
     }
+    /* ساعت/آفلاین همیشه سمت راست نام اکانت (در RTL اولین آیتم سمت راست است؛ در LTR انتهای ردیف سمت راست است) */
+    html:not([dir="ltr"]) .tg-mockup-name-row .tg-mockup-lastname { order: -1; }
     .tg-mockup-firstname {
       font-size: 1.24rem;
       font-weight: 900;
@@ -4062,6 +4066,126 @@ export function panelHTML(env, options = {}) {
     html[lang="en"] #featuresIntroModal button,
     html[lang="en"] #featuresIntroModal .btn {
       font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+    }
+
+    /* ==========================================================
+       🔤 سیستم یکپارچهٔ تایپوگرافی
+       فارسی: Vazirmatn (ارقام و حروف لاتین هماهنگ)، انگلیسی: Outfit، کد/شناسه: JetBrains Mono
+       ========================================================== */
+    :root {
+      --font-sans: 'Vazirmatn', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-display: 'Vazirmatn', 'Outfit', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --fs-xs: clamp(0.72rem, 0.7rem + 0.1vw, 0.78rem);
+      --fs-sm: clamp(0.8rem, 0.78rem + 0.12vw, 0.88rem);
+      --fs-base: clamp(0.9rem, 0.87rem + 0.15vw, 0.98rem);
+      --fs-lg: clamp(1.02rem, 0.96rem + 0.3vw, 1.15rem);
+      --fs-xl: clamp(1.18rem, 1.05rem + 0.6vw, 1.45rem);
+      --fs-2xl: clamp(1.4rem, 1.15rem + 1.2vw, 2rem);
+    }
+    html[lang="en"], html[dir="ltr"] {
+      --font-sans: 'Outfit', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-display: 'Outfit', 'Vazirmatn', sans-serif;
+    }
+    html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+    body, button, input, select, textarea, optgroup,
+    .btn, .btn-admin-highlight, .modal-container, .glass-card {
+      font-family: var(--font-sans) !important;
+    }
+    body {
+      font-size: var(--fs-base);
+      line-height: 1.75;
+      letter-spacing: 0;
+      font-feature-settings: "ss01", "kern";
+      font-kerning: normal;
+    }
+    html[lang="en"] body { line-height: 1.6; letter-spacing: 0.005em; }
+    h1, h2, h3, h4, .modal-heading, .brand {
+      font-family: var(--font-display) !important;
+      line-height: 1.35;
+      letter-spacing: -0.01em;
+      text-wrap: balance;
+    }
+    h1 { font-size: var(--fs-2xl); font-weight: 900; }
+    h2 { font-size: var(--fs-xl); font-weight: 800; }
+    h3 { font-size: var(--fs-lg); font-weight: 800; }
+    p, li, label { text-wrap: pretty; }
+    code, kbd, pre, samp, .mono, [style*="monospace"], [style*="--font-mono"] {
+      font-family: var(--font-mono) !important;
+      direction: ltr;
+      unicode-bidi: isolate;
+    }
+    /* ارقام جدولی برای ساعت، آمار و جدول‌ها تا هنگام تغییر نپرند */
+    .tg-clock-digits, .admin-table td, [class*="stat"] { font-variant-numeric: tabular-nums; }
+    input::placeholder, textarea::placeholder { font-family: var(--font-sans); opacity: 0.7; }
+
+    /* ==========================================================
+       📱 لایهٔ ریسپانسیو موبایل
+       ========================================================== */
+    img, video, canvas, svg { max-width: 100%; height: auto; }
+    .glass-card, .modal-container, .sys-grid > *, .stats-grid > * { min-width: 0; }
+    .table-responsive-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+
+    @media (max-width: 768px) {
+      body {
+        padding-left: calc(10px + env(safe-area-inset-left, 0px));
+        padding-right: calc(10px + env(safe-area-inset-right, 0px));
+      }
+      .sys-grid, [style*="minmax(340px"], [style*="minmax(280px"], [style*="minmax(260px"] {
+        grid-template-columns: 1fr !important;
+      }
+      .admin-subtab-bar, .segmented-control, .tab-bar, .nav-tabs {
+        overflow-x: auto;
+        flex-wrap: nowrap !important;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+      }
+      .admin-subtab-bar::-webkit-scrollbar, .segmented-control::-webkit-scrollbar { display: none; }
+      .admin-subtab-btn, .segmented-btn { flex: 0 0 auto; scroll-snap-align: start; white-space: nowrap; }
+      .admin-table { font-size: var(--fs-sm); }
+      .admin-table th, .admin-table td { padding: 10px 8px; white-space: nowrap; }
+    }
+
+    @media (max-width: 640px) {
+      /* فونت ۱۶ پیکسل در فرم‌ها تا iOS هنگام تایپ بزرگ‌نمایی نکند */
+      input, select, textarea { font-size: 16px !important; }
+      button, .btn, .segmented-btn, .admin-subtab-btn, input[type="checkbox"] + label { min-height: 44px; }
+      .btn, button { touch-action: manipulation; }
+      .glass-card { padding: 18px 14px; border-radius: 20px; }
+      h1 { font-size: 1.45rem; }
+      h2 { font-size: 1.2rem; }
+      .stats-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+      /* مودال‌ها به‌صورت برگهٔ پایین صفحه (Bottom Sheet) */
+      .modal-backdrop { padding: 0 !important; align-items: flex-end !important; }
+      .modal-container {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px));
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 22px 22px 0 0 !important;
+        padding: 20px 16px calc(20px + env(safe-area-inset-bottom, 0px)) !important;
+      }
+      .modal-head { position: sticky; top: -20px; z-index: 2; background: inherit; padding-top: 4px; }
+      .nav-actions { flex-wrap: wrap; gap: 6px; }
+      .footer-dock { padding-bottom: calc(14px + env(safe-area-inset-bottom, 0px)); }
+      .tg-mockup-wrapper { padding: 14px !important; }
+      /* جلوگیری از بیرون‌زدگی شناسه‌ها و لینک‌های طولانی */
+      p, li, td, label, code, .sys-status { overflow-wrap: anywhere; }
+    }
+
+    @media (max-width: 380px) {
+      .stats-grid { grid-template-columns: 1fr !important; }
+      .glass-card { padding: 16px 12px; }
+      .tg-mockup-avatar { width: 50px !important; height: 50px !important; font-size: 1.1rem !important; }
+    }
+
+    @media (hover: none) {
+      .btn:hover, .btn-nav-action:hover, .glass-card:hover { transform: none !important; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
     }
   </style>
 </head>
