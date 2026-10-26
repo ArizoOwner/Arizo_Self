@@ -729,7 +729,7 @@ export default {
     if (url.pathname === '/api/admin/update/check' && request.method === 'GET') {
       if (!await getAdminAuth(request, env)) return json({ error: 'دسترسی غیرمجاز' }, 401);
       try {
-        const info = await checkForUpdate({ fresh: url.searchParams.get('fresh') === '1' });
+        const info = await checkForUpdate({ fresh: url.searchParams.get('fresh') === '1', state: await getUpdaterState(env) });
         return json({ ok: true, ...info }, 200, { 'Cache-Control': 'no-store' });
       } catch (err) {
         if (err instanceof WizardError) return json({ ok: false, code: err.code, fa: err.fa, en: err.en }, err.status, { 'Cache-Control': 'no-store' });
@@ -789,7 +789,11 @@ export default {
             if (!name) {
               return json({ ok: false, code: 'need_worker_name', fa: 'نام Worker از آدرس سایت مشخص نیست؛ آن را وارد کنید.', en: 'The Worker name cannot be read from the address; please enter it.' }, 400, { 'Cache-Control': 'no-store' });
             }
-            out = await applyCodeUpdate({ cfToken: body.cfToken, workerName: name, force: body.force === true });
+            out = await applyCodeUpdate({ cfToken: body.cfToken, workerName: name, force: body.force === true, state: await getUpdaterState(env) });
+            await putUpdaterState(env, {
+              lastInstalledBuild: out.latest.build, installedBuild: out.latest.build, installedSha: out.sha256,
+              lastResult: { at: Date.now(), ok: true, source: 'manual', version: out.latest.version, build: out.latest.build, runner: 'skipped' }
+            });
           } else {
             out = await runStoredUpdate(env, { force: body.force === true, source: 'manual' });
             name = out.workerName;
