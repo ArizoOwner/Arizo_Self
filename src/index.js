@@ -2554,7 +2554,7 @@ export default {
             afkEnabled: !!u.telegram.afkEnabled,
             afkMessage: u.telegram.afkMessage || '',
             afkCooldown: u.telegram.afkCooldown ?? 10,
-            muteEnabled: u.telegram.muteEnabled !== false && Array.isArray(u.telegram.mutedUsers) && u.telegram.mutedUsers.length > 0,
+            muteEnabled: u.telegram.muteEnabled === true || (u.telegram.muteEnabled !== false && Array.isArray(u.telegram.mutedUsers) && u.telegram.mutedUsers.length > 0),
             mutedUsers: u.telegram.mutedUsers || [],
             antiTtlEnabled: !!(u.telegram.antiTtlEnabled ?? u.antiTtlEnabled),
             ghostMode: !!u.telegram.ghostMode,
@@ -3353,7 +3353,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
 
         // 🔇 فیلتر سکوت: همان منطق پنل (فعال = سوییچ روشن و لیست غیرخالی)
         const muteList = (targetU) => (Array.isArray(targetU.telegram?.mutedUsers) ? targetU.telegram.mutedUsers : []);
-        const muteOn = (targetU) => targetU.telegram?.muteEnabled !== false && muteList(targetU).length > 0;
+        const muteOn = (targetU) => targetU.telegram?.muteEnabled === true || (targetU.telegram?.muteEnabled !== false && muteList(targetU).length > 0);
         const normMute = (raw) => {
           let s = String(raw || '').trim()
             .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
@@ -5378,14 +5378,11 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
             let note = '🔇 منوی فیلتر سکوت';
             let alert = false;
             if (data === 'mute_toggle') {
-              if (!muteList(u).length) {
-                note = '⚠️ ابتدا حداقل یک کاربر به لیست سکوت اضافه کنید.';
-                alert = true;
-              } else {
-                u.telegram.muteEnabled = !muteOn(u);
-                await env.KV.put('user:' + targetUsername, JSON.stringify(u));
-                note = u.telegram.muteEnabled ? '🟢 فیلتر سکوت روشن شد' : '⚪ فیلتر سکوت خاموش شد';
-              }
+              u.telegram.muteEnabled = !muteOn(u);
+              await env.KV.put('user:' + targetUsername, JSON.stringify(u));
+              note = u.telegram.muteEnabled
+                ? (muteList(u).length ? '🟢 فیلتر سکوت روشن شد' : '🟢 فیلتر سکوت روشن شد (لیست فعلاً خالی است)')
+                : '⚪ فیلتر سکوت خاموش شد';
             } else if (data === 'mute_clear') {
               u.telegram.mutedUsers = [];
               await env.KV.put('user:' + targetUsername, JSON.stringify(u));
