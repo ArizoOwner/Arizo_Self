@@ -3351,6 +3351,46 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
             .replace(/"/g, '&quot;');
         };
 
+        // 🔇 فیلتر سکوت: همان منطق پنل (فعال = سوییچ روشن و لیست غیرخالی)
+        const muteList = (targetU) => (Array.isArray(targetU.telegram?.mutedUsers) ? targetU.telegram.mutedUsers : []);
+        const muteOn = (targetU) => targetU.telegram?.muteEnabled !== false && muteList(targetU).length > 0;
+        const normMute = (raw) => {
+          let s = String(raw || '').trim()
+            .replace(/[۰-۹]/g, d => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d))
+            .replace(/^https?:\/\/(www\.)?t\.me\//i, '').replace(/^t\.me\//i, '').replace(/^@+/, '');
+          if (!s) return '';
+          if (/^-?\d{3,20}$/.test(s)) return s;
+          if (/^[A-Za-z][A-Za-z0-9_]{3,31}$/.test(s)) return '@' + s;
+          return '';
+        };
+        const muteKey = (x) => String(x || '').toLowerCase().replace(/^@/, '');
+        const renderMuteMessage = (targetU) => {
+          const list = muteList(targetU);
+          const listText = list.length
+            ? list.map((x, i) => `${i + 1}. <code>${escapeHtml(x)}</code>`).join('\n')
+            : '<i>هنوز هیچ کاربری در لیست سکوت نیست.</i>';
+          return `🔇 <b>[فیلتر سکوت — Mute]</b>\n` +
+            `━━━━━━━━━━━━━━━━━━━━\n` +
+            `وضعیت: <b>${muteOn(targetU) ? 'روشن 🟢' : 'خاموش ⚪'}</b>\n` +
+            `پیام جدید افراد این لیست به‌صورت خودکار حذف می‌شود (فقط همان پیام، نه کل چت).\n\n` +
+            `📋 <b>لیست (${list.length} کاربر):</b>\n${listText}\n\n` +
+            `💡 برای حذف یک نفر از لیست، روی دکمهٔ ➖ کنار نام او بزنید.\n` +
+            `⏱️ تغییرات حداکثر ظرف یک دقیقه روی سلف‌بات اعمال می‌شود.`;
+        };
+        const renderMuteKeyboard = (targetU) => {
+          const list = muteList(targetU);
+          const rows = [
+            [{ text: `🔄 فیلتر سکوت: ${muteOn(targetU) ? 'خاموش کردن ⚪' : 'روشن کردن 🟢'}`, callback_data: 'mute_toggle', style: muteOn(targetU) ? 'danger' : 'success' }],
+            [{ text: '➕ افزودن کاربر به لیست سکوت', callback_data: 'mute_add_prompt', style: 'primary' }]
+          ];
+          list.slice(0, 20).forEach((x, i) => {
+            rows.push([{ text: `➖ حذف ${String(x).slice(0, 32)}`, callback_data: `mute_del:${i}` }]);
+          });
+          if (list.length) rows.push([{ text: '🗑️ پاکسازی کامل لیست سکوت', callback_data: 'mute_clear', style: 'danger' }]);
+          rows.push([{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'bot_menu', style: 'danger' }]);
+          return { inline_keyboard: rows };
+        };
+
         // تولید کیبورد شیشه‌ای رسمی و هوشمند با رنگ‌بندی داینامیک
         const renderMainKeyboard = (targetU) => {
           const isAct = !!targetU.telegram?.enabled && !targetU.isSuspended;
@@ -3376,6 +3416,9 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
               [
                 { text: '🎨 تغییر فونت ساعت', callback_data: 'bot_font_menu', style: 'primary' },
                 { text: '🧪 تست ارسال گزارش', callback_data: 'bot_test', style: 'primary' }
+              ],
+              [
+                { text: `🔇 فیلتر سکوت: ${muteOn(targetU) ? 'روشن 🟢' : 'خاموش ⚪'} (${muteList(targetU).length})`, callback_data: 'mute_menu', style: muteOn(targetU) ? 'success' : 'primary' }
               ],
               [
                 { text: '🌐 باز کردن پنل در مرورگر', url: directAppUrl, style: 'primary' }
@@ -3698,6 +3741,35 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
                 reply_markup: renderAiKeyboard(u)
               })
             }).catch(() => {});
+            return new Response('OK');
+          }
+
+          // 🔇 افزودن فرد به لیست سکوت از طریق ربات
+          if (pendingReply && pendingReply.waitingFor === 'mute_add_user' && text) {
+            globalThis.botUserReplyStates.delete(String(chatId));
+            await env.KV.delete('bot_state:' + chatId);
+            const send = (t) => fetch(`https://api.telegram.org/bot${actualBotToken}/sendMessage`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text: t, parse_mode: 'HTML', reply_markup: renderMuteKeyboard(u) })
+            }).catch(() => {});
+            if (text === '/cancel') { await send('❌ افزودن به لیست سکوت لغو شد.'); return new Response('OK'); }
+            const entries = text.split(/[,،\s]+/).map(normMute).filter(Boolean);
+            if (!entries.length) {
+              await send('⚠️ شناسه عددی یا یوزرنیم معتبر نیست. مثال: <code>@username</code> یا <code>12345678</code>');
+              return new Response('OK');
+            }
+            const list = muteList(u).slice();
+            const added = [];
+            for (const e of entries) {
+              if (list.length >= 200) break;
+              if (!list.some(x => muteKey(x) === muteKey(e))) { list.push(e); added.push(e); }
+            }
+            u.telegram.mutedUsers = list;
+            if (added.length) u.telegram.muteEnabled = true;
+            await env.KV.put('user:' + targetUsername, JSON.stringify(u));
+            await send(added.length
+              ? `🔇 به لیست سکوت اضافه شد: ${added.map(x => `<code>${escapeHtml(x)}</code>`).join('، ')}\nفیلتر سکوت روشن است.`
+              : 'ℹ️ این کاربر از قبل در لیست سکوت بود.');
             return new Response('OK');
           }
 
@@ -5298,6 +5370,64 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
                   force_reply: true,
                   selective: true
                 }
+              })
+            }).catch(() => {});
+
+          } else if (data === 'mute_menu' || data === 'mute_toggle' || data === 'mute_clear' || data.startsWith('mute_del:')) {
+            let note = '🔇 منوی فیلتر سکوت';
+            let alert = false;
+            if (data === 'mute_toggle') {
+              if (!muteList(u).length) {
+                note = '⚠️ ابتدا حداقل یک کاربر به لیست سکوت اضافه کنید.';
+                alert = true;
+              } else {
+                u.telegram.muteEnabled = !muteOn(u);
+                await env.KV.put('user:' + targetUsername, JSON.stringify(u));
+                note = u.telegram.muteEnabled ? '🟢 فیلتر سکوت روشن شد' : '⚪ فیلتر سکوت خاموش شد';
+              }
+            } else if (data === 'mute_clear') {
+              u.telegram.mutedUsers = [];
+              await env.KV.put('user:' + targetUsername, JSON.stringify(u));
+              note = '✅ لیست سکوت پاکسازی شد';
+            } else if (data.startsWith('mute_del:')) {
+              const idx = parseInt(data.slice(9), 10);
+              const list = muteList(u).slice();
+              if (Number.isInteger(idx) && idx >= 0 && idx < list.length) {
+                const [removed] = list.splice(idx, 1);
+                u.telegram.mutedUsers = list;
+                await env.KV.put('user:' + targetUsername, JSON.stringify(u));
+                note = `✅ ${String(removed).slice(0, 40)} از لیست سکوت حذف شد`;
+              } else {
+                note = '⚠️ لیست تغییر کرده است؛ دوباره امتحان کنید.';
+              }
+            }
+            await fetch(`https://api.telegram.org/bot${actualBotToken}/answerCallbackQuery`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ callback_query_id: cb.id, text: note, show_alert: alert })
+            }).catch(() => {});
+            await fetch(`https://api.telegram.org/bot${actualBotToken}/${messageId ? 'editMessageText' : 'sendMessage'}`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId, ...(messageId ? { message_id: messageId } : {}),
+                text: renderMuteMessage(u), parse_mode: 'HTML', reply_markup: renderMuteKeyboard(u)
+              })
+            }).catch(() => {});
+
+          } else if (data === 'mute_add_prompt') {
+            await env.KV.put('bot_state:' + chatId, JSON.stringify({ waitingFor: 'mute_add_user' }), { expirationTtl: 600 });
+            await fetch(`https://api.telegram.org/bot${actualBotToken}/answerCallbackQuery`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ callback_query_id: cb.id, text: 'شناسه یا یوزرنیم را ارسال کنید' })
+            }).catch(() => {});
+            await fetch(`https://api.telegram.org/bot${actualBotToken}/sendMessage`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: `➕ <b>افزودن به لیست سکوت:</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+                  `<b>یوزرنیم (@username)</b> یا <b>شناسه عددی</b> فرد را در پاسخ به این پیام بفرستید. چند مورد را هم می‌توانید با فاصله جدا کنید.\n\n` +
+                  `❌ برای انصراف: <code>/cancel</code>`,
+                parse_mode: 'HTML',
+                reply_markup: { force_reply: true, selective: true }
               })
             }).catch(() => {});
 
