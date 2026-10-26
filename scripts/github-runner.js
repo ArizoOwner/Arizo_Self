@@ -2485,6 +2485,21 @@ class TelegramConnectionPool {
   async handleRawUpdate(entry, username, update) {
     if (!update) return;
 
+    // 🖼️ تغییر عکس/نام همین حساب → همگام‌سازی فوری با پنل (با فاصلهٔ حداقل ۱۰ ثانیه)
+    try {
+      const cn = update.className || '';
+      const uid = update.userId ? update.userId.toString() : '';
+      if ((cn === 'UpdateUser' || cn === 'UpdateUserPhoto' || cn === 'UpdateUserName') && uid && entry.myId && uid === String(entry.myId)
+          && entry.client && Date.now() - (entry.lastInstantProfileSync || 0) > 10000) {
+        entry.lastInstantProfileSync = Date.now();
+        setTimeout(() => {
+          entry.client.getMe().then(me => {
+            if (me && me.id) syncOwnerTgIdToCloudflare(username, me.id.toString(), me, entry.client);
+          }).catch(() => {});
+        }, 1500);
+      }
+    } catch (_) {}
+
     // ۱. پایش وضعیت آنلاین کاربر و رویدادهای چت در حساب تلگرام (حتی در صورت خاموش بودن ربات دستیار)
     this.detectSelfUserStatus(entry, username, update);
 
@@ -2982,8 +2997,8 @@ async function syncUserSettings(usersList) {
         watchAlerts: u.watchAlerts || null
       };
       applyPendingOverrides(u.username, entry, u);
-      // بازبینی نام و عکس پروفایل تلگرام هر ۳۰ دقیقه
-      if (entry.client && isClientConnected(entry) && Date.now() - (entry.lastProfileCheck || 0) > 1800000) {
+      // بازبینی نام و عکس پروفایل تلگرام هر ۲ دقیقه (عکس فقط در صورت تغییر ارسال می‌شود)
+      if (entry.client && isClientConnected(entry) && Date.now() - (entry.lastProfileCheck || 0) > 120000) {
         entry.lastProfileCheck = Date.now();
         entry.client.getMe().then(me => {
           if (me && me.id) syncOwnerTgIdToCloudflare(u.username, me.id.toString(), me, entry.client);
