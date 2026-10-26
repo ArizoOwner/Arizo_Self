@@ -17,7 +17,7 @@
 <a href="#"><img src="https://img.shields.io/badge/Response_Time-%3C%2040ms-a855f7?style=for-the-badge&labelColor=0d1117" alt="Response Time"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Security-2FA_TOTP_+_Honeypot-ec4899?style=for-the-badge&labelColor=0d1117" alt="Security"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Uptime-99.9%25-0ea5e9?style=for-the-badge&labelColor=0d1117" alt="Uptime"/></a>
-<a href="#"><img src="https://img.shields.io/badge/Version-3.6_PRO-f59e0b?style=for-the-badge&labelColor=0d1117" alt="Version"/></a>
+<a href="#"><img src="https://img.shields.io/badge/Version-4.0_PRO-f59e0b?style=for-the-badge&labelColor=0d1117" alt="Version"/></a>
 
 <br><br>
 
@@ -165,7 +165,9 @@
 ### 🔇 &nbsp; 9. Silence & Auto-Purge Filter (Mute)
 > Completely silence unwanted contacts and instantly purge messages for both parties.
 
-- 🗑️ Two-way instant purge using MTProto `revoke: true` flag
+- 🗑️ Deletes only the muted person's new message (never the whole chat history)
+- 🎛️ Independent on/off switch; can stay on even with an empty list
+- 🤖 Full control from the Telegram bot: on/off, add, remove one, clear list
 - 🔢 Automatic support for both Persian and English digits
 - ⌨️ Direct in-chat Telegram commands `.mute` and `.unmute`
 - 👻 Automatic AccessHash resolution for users outside of your address book
@@ -241,6 +243,8 @@
 - 🌓 Automatic synchronization with your Telegram client's Dark/Light theme
 - 📊 Real-time telemetry, active socket monitoring, and live audit logs
 - 🛠️ Instant configuration updates via mobile-optimized neo-glass interface
+- 📱 Fully responsive mobile layout, unified Vazirmatn/Outfit typography and bottom-sheet modals
+- 🖼️ Live Telegram profile photo that refreshes within seconds of a change
 
 </td>
 <td width="50%">
@@ -554,7 +558,7 @@ pm2 save && pm2 startup
 <div align="center">
 <samp>
 
-**Arizo Self Engine v3.6.2 PRO** — Engineered with precision for maximum speed, bulletproof 2FA security & pure aesthetics 💎
+**Arizo Self Engine v4.0 PRO** — Engineered with precision for maximum speed, bulletproof 2FA security & pure aesthetics 💎
 
 Made with ❤️ by **Arizo Team**
 
