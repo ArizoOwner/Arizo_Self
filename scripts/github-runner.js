@@ -1268,7 +1268,7 @@ class TelegramConnectionPool {
           afkEnabled: !!userSettings?.afkEnabled,
           afkMessage: userSettings?.afkMessage || '',
           afkCooldown: userSettings?.afkCooldown ?? 10,
-          muteEnabled: userSettings?.muteEnabled !== false && Array.isArray(userSettings?.mutedUsers) && userSettings.mutedUsers.length > 0,
+          muteEnabled: userSettings?.muteEnabled === true || (userSettings?.muteEnabled !== false && Array.isArray(userSettings?.mutedUsers) && userSettings.mutedUsers.length > 0),
           mutedUsers: Array.isArray(userSettings?.mutedUsers) ? [...userSettings.mutedUsers] : [],
           antiTtlEnabled: !!userSettings?.antiTtlEnabled,
           bot: userSettings?.bot || null,
@@ -1360,7 +1360,7 @@ class TelegramConnectionPool {
         afkEnabled: !!userSettings.afkEnabled,
         afkMessage: userSettings.afkMessage || '',
         afkCooldown: userSettings.afkCooldown ?? 10,
-        muteEnabled: userSettings.muteEnabled !== false && serverMuted.length > 0,
+        muteEnabled: userSettings.muteEnabled === true || (userSettings.muteEnabled !== false && serverMuted.length > 0),
         mutedUsers: serverMuted,
         antiTtlEnabled: !!userSettings.antiTtlEnabled,
         bot: userSettings.bot || null,
@@ -1741,7 +1741,7 @@ class TelegramConnectionPool {
           const changed = next.length !== current.length;
           entry.settings.mutedUsers = next;
           entry.localMutedUsers = new Set(next.map(cleanMuteTarget).filter(Boolean));
-          if (next.length === 0) entry.settings.muteEnabled = false;
+          // فیلتر سکوت با خالی شدن لیست خاموش نمی‌شود (روشن ماندن با لیست خالی مجاز است)
           syncUserMuteToCloudflare(username, next).catch(() => {});
           console.log(`🔊 [${username}] .unmute removed ${current.length - next.length} target(s)`);
           await replyNotice(changed
@@ -2979,7 +2979,7 @@ async function syncUserSettings(usersList) {
         afkEnabled: !!u.afkEnabled,
         afkMessage: u.afkMessage || '',
         afkCooldown: u.afkCooldown ?? 10,
-        muteEnabled: u.muteEnabled !== false && serverMuted.length > 0,
+        muteEnabled: u.muteEnabled === true || (u.muteEnabled !== false && serverMuted.length > 0),
         mutedUsers: serverMuted,
         antiTtlEnabled: !!u.antiTtlEnabled,
         bot: u.bot || null,
