@@ -7619,7 +7619,9 @@ export function panelHTML(env, options = {}) {
         if (st) {
           if (d.updateAvailable) {
             st.className = 'sys-status new';
-            st.textContent = (en ? '🆕 A new version is available: v' : '🆕 نسخهٔ جدید موجود است: v') + d.latest.version + ' ' + d.latest.channel + '  (build ' + d.latest.build + ')  —  ' + (en ? 'published ' : 'انتشار: ') + sysDate(d.latest.publishedAt);
+            st.textContent = d.contentChanged
+              ? (en ? '🔄 Files of your current version (v' : '🔄 فایل‌های نسخهٔ فعلی شما (v') + d.latest.version + ') ' + (en ? 'were updated in the release — install to apply.  Published ' : 'در ریلیز تغییر کرده‌اند — برای اعمال، به‌روزرسانی کنید.  انتشار: ') + sysDate(d.latest.publishedAt)
+              : (en ? '🆕 A new version is available: v' : '🆕 نسخهٔ جدید موجود است: v') + d.latest.version + ' ' + d.latest.channel + '  (build ' + d.latest.build + ')  —  ' + (en ? 'published ' : 'انتشار: ') + sysDate(d.latest.publishedAt);
           } else {
             st.className = 'sys-status ok';
             st.textContent = (en ? '✅ You are on the latest version (v' : '✅ شما آخرین نسخه را دارید (v') + d.current.version + ' ' + d.current.channel + ').  ' + (en ? 'Checked ' : 'آخرین بررسی: ') + sysDate(d.checkedAt);
