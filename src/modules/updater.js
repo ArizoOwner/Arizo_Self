@@ -59,12 +59,27 @@ export async function fetchLatestRelease({ fresh = false } = {}) {
   return data;
 }
 
-export async function checkForUpdate({ fresh = false } = {}) {
+/**
+ * آیا فایل‌های همین نسخه (همان شمارهٔ ساخت) بعد از نصب در ریلیز تغییر کرده‌اند؟
+ * ملاک: هش کد نصب‌شده (در وضعیت به‌روزرسانی ثبت می‌شود)؛ اگر هش ثبت نشده باشد،
+ * زمان انتشار ریلیز با زمان آخرین نصب مقایسه می‌شود.
+ */
+export function sameBuildChanged(latest, st) {
+  if (!latest || latest.build !== APP_BUILD) return false;
+  const s = st || {};
+  if (s.installedSha && s.installedBuild === APP_BUILD) return s.installedSha !== latest.sha256;
+  const installedAt = s.lastResult && s.lastResult.ok && s.lastResult.build === APP_BUILD ? Number(s.lastResult.at) : 0;
+  return Boolean(installedAt && latest.publishedAt && latest.publishedAt > installedAt);
+}
+
+export async function checkForUpdate({ fresh = false, state = null } = {}) {
   const latest = await fetchLatestRelease({ fresh });
+  const contentChanged = sameBuildChanged(latest, state);
   return {
     current: { version: APP_VERSION, build: APP_BUILD, channel: APP_CHANNEL },
     latest,
-    updateAvailable: latest.build > APP_BUILD,
+    updateAvailable: latest.build > APP_BUILD || contentChanged,
+    contentChanged,
     checkedAt: Date.now()
   };
 }
@@ -86,9 +101,9 @@ export async function cfUpdateWorkerCode(tokenRaw, accountId, workerName, source
 }
 
 /** دانلود + راستی‌آزمایی هش + جایگزینی کد روی همین Worker */
-export async function applyCodeUpdate({ cfToken, workerName, force = false }) {
+export async function applyCodeUpdate({ cfToken, workerName, force = false, state = null }) {
   const latest = await fetchLatestRelease({ fresh: true });
-  if (!force && latest.build <= APP_BUILD) {
+  if (!force && latest.build <= APP_BUILD && !sameBuildChanged(latest, state)) {
     throw new WizardError('up_to_date', 'نسخهٔ شما از قبل آخرین نسخه است.', 'You already have the latest version.', 409);
   }
   const source = await fetchWorkerSource();
@@ -202,13 +217,16 @@ export async function runStoredUpdate(env, { force = false, source = 'manual' } 
   if (!creds || !creds.cfToken) {
     throw new WizardError('not_connected', 'به‌روزرسانی خودکار هنوز متصل نشده است؛ توکن Cloudflare را یک بار ثبت کنید.', 'Auto-update is not connected yet; save a Cloudflare token once.', 409);
   }
-  const out = await applyCodeUpdate({ cfToken: creds.cfToken, workerName: creds.workerName, force });
+  const st = await getUpdaterState(env);
+  const out = await applyCodeUpdate({ cfToken: creds.cfToken, workerName: creds.workerName, force, state: st });
   let runner = null;
   if (creds.ghToken) {
     try { runner = await ghSyncRunner(creds.ghToken, creds.repo); } catch (e) { runner = { error: e.code || 'failed' }; }
   }
   await putUpdaterState(env, {
     lastInstalledBuild: out.latest.build,
+    installedBuild: out.latest.build,
+    installedSha: out.sha256,
     lastResult: { at: Date.now(), ok: true, source, version: out.latest.version, build: out.latest.build, runner: creds.ghToken ? (runner && !runner.error ? 'ok' : 'failed') : 'skipped' }
   });
   return { ...out, workerName: creds.workerName, runner };
@@ -225,8 +243,13 @@ export async function autoUpdateTick(env) {
   await putUpdaterState(env, { lastCheck: now });
   try {
     const latest = await fetchLatestRelease({ fresh: true });
-    // هر شمارهٔ ساخت فقط یک بار خودکار نصب می‌شود؛ اگر ریلیز ناسازگار منتشر شود، حلقهٔ نصب تکراری ایجاد نمی‌شود
-    if (latest.build > APP_BUILD && latest.build > (st.lastInstalledBuild || 0)) await runStoredUpdate(env, { source: 'auto' });
+    // هر شمارهٔ ساخت/هش فقط یک بار خودکار نصب می‌شود؛ اگر ریلیز ناسازگار منتشر شود، حلقهٔ نصب تکراری ایجاد نمی‌شود
+    const newer = latest.build > APP_BUILD && latest.build > (st.lastInstalledBuild || 0);
+    const changed = sameBuildChanged(latest, st) && st.lastAutoSha !== latest.sha256;
+    if (newer || changed) {
+      if (changed) await putUpdaterState(env, { lastAutoSha: latest.sha256 });
+      await runStoredUpdate(env, { source: 'auto' });
+    }
   } catch (e) {
     // خطای موقت (مثلاً محدودیت نرخ GitHub): به‌جای ۶ ساعت انتظار، ۱۵ دقیقهٔ دیگر دوباره تلاش می‌شود
     const retryIn = 15 * 60 * 1000;
