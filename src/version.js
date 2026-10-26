@@ -1,12 +1,13 @@
 // منبع یگانهٔ نسخه: پنل، بررسی به‌روزرسانی و اسکریپت انتشار ریلیز همه از همین فایل می‌خوانند.
 // برای انتشار نسخهٔ جدید فقط APP_BUILD (و در صورت نیاز APP_VERSION و یادداشت‌ها) را بالا ببرید.
 export const APP_NAME = 'Arizo Self';
-export const APP_VERSION = '3.6.9';
+export const APP_VERSION = '4.0.0';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026102607;
+export const APP_BUILD = 2026102700;
 
 export const RELEASE_NOTES = {
   fa: [
+    'نسخهٔ نهایی ۴ پرو: شامل همهٔ رفع‌ها و قابلیت‌های قبلی (سکوت، نام و عکس پروفایل تلگرام، به‌روزرسانی هوشمند)',
     'رفع نمایش‌ندادن عکس پروفایل تلگرام در پیش‌نمایش (ذخیرهٔ صحیح تصویر)',
     'بروزرسانی پنل حالا تغییر فایل‌های همان نسخهٔ نصب‌شده در ریلیز را هم تشخیص می‌دهد و نصب می‌کند (مقایسهٔ هش)',
     'رفع باگ مهم سکوت: دیگر کل تاریخچهٔ چت حذف نمی‌شود؛ فقط همان پیام فرد ساکت‌شده پاک می‌شود',
@@ -23,6 +24,7 @@ export const RELEASE_NOTES = {
     'ویزارد روی Worker دیپلوی‌شده فقط «راه‌اندازی» می‌کند و دیتابیس‌های موجود را دوباره استفاده می‌کند'
   ],
   en: [
+    'Final v4 PRO: includes all previous fixes and features (mute, Telegram name and photo preview, smart updater)',
     'Fixed the Telegram profile photo not showing in the preview (correct image storage)',
     'Panel updater now also detects and installs changed files within the same installed release (hash comparison)',
     'Critical mute fix: no longer wipes the whole chat history; only the muted person\'s message is deleted',
