@@ -3380,14 +3380,17 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
         const renderMuteKeyboard = (targetU) => {
           const list = muteList(targetU);
           const rows = [
-            [{ text: `🔄 فیلتر سکوت: ${muteOn(targetU) ? 'خاموش کردن ⚪' : 'روشن کردن 🟢'}`, callback_data: 'mute_toggle', style: muteOn(targetU) ? 'danger' : 'success' }],
-            [{ text: '➕ افزودن کاربر به لیست سکوت', callback_data: 'mute_add_prompt', style: 'primary' }]
+            [
+              { text: muteOn(targetU) ? '⚪ خاموش کردن' : '🟢 روشن کردن', callback_data: 'mute_toggle', style: muteOn(targetU) ? 'danger' : 'success' },
+              { text: '➕ افزودن کاربر', callback_data: 'mute_add_prompt', style: 'primary' }
+            ]
           ];
           list.slice(0, 20).forEach((x, i) => {
             rows.push([{ text: `➖ حذف ${String(x).slice(0, 32)}`, callback_data: `mute_del:${i}` }]);
           });
-          if (list.length) rows.push([{ text: '🗑️ پاکسازی کامل لیست سکوت', callback_data: 'mute_clear', style: 'danger' }]);
-          rows.push([{ text: '🔙 بازگشت به منوی اصلی', callback_data: 'bot_menu', style: 'danger' }]);
+          const tail = [{ text: '🔙 منوی اصلی', callback_data: 'bot_menu', style: 'danger' }];
+          if (list.length) tail.unshift({ text: '🗑️ پاکسازی لیست', callback_data: 'mute_clear', style: 'danger' });
+          rows.push(tail);
           return { inline_keyboard: rows };
         };
 
@@ -3399,29 +3402,27 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
           return {
             inline_keyboard: [
               [
-                { text: '⚡ ورود به استودیوی سلف‌بات (Mini App)', web_app: { url: directAppUrl }, style: 'primary' }
+                { text: '⚡ ورود به پنل (Mini App)', web_app: { url: directAppUrl }, style: 'primary' }
               ],
               [
-                { text: '👻 چت‌های خصوصی (حالت شبح)', callback_data: 'ghost_chats', style: 'primary' },
-                { text: '📊 استعلام وضعیت زنده', callback_data: 'bot_status', style: 'primary' }
+                { text: `${isAct ? '🟢' : '⚪'} سلف‌بات`, callback_data: 'bot_toggle', style: isAct ? 'success' : 'danger' },
+                { text: '📊 وضعیت زنده', callback_data: 'bot_status', style: 'primary' }
               ],
               [
-                { text: `🔄 سلف‌بات: ${isAct ? 'روشن 🟢' : 'خاموش ⚪'}`, callback_data: 'bot_toggle', style: isAct ? 'success' : 'danger' },
-                { text: `👻 حالت شبح: ${ghostAct ? 'روشن 🟢' : 'خاموش ⚪'}`, callback_data: 'bot_toggle_ghost', style: ghostAct ? 'success' : 'danger' }
+                { text: `${ghostAct ? '🟢' : '⚪'} حالت شبح`, callback_data: 'bot_toggle_ghost', style: ghostAct ? 'success' : 'danger' },
+                { text: '👻 چت‌های شبح', callback_data: 'ghost_chats', style: 'primary' }
               ],
               [
-                { text: `🤖 هوش مصنوعی: ${aiAct ? 'روشن 🟢' : 'خاموش ⚪'}`, callback_data: 'bot_toggle_ai', style: aiAct ? 'success' : 'danger' },
-                { text: '⚙️ مدیریت هوش مصنوعی (AI)', callback_data: 'bot_ai_info', style: 'primary' }
+                { text: `${aiAct ? '🟢' : '⚪'} هوش مصنوعی`, callback_data: 'bot_toggle_ai', style: aiAct ? 'success' : 'danger' },
+                { text: '⚙️ تنظیمات AI', callback_data: 'bot_ai_info', style: 'primary' }
               ],
               [
-                { text: '🎨 تغییر فونت ساعت', callback_data: 'bot_font_menu', style: 'primary' },
-                { text: '🧪 تست ارسال گزارش', callback_data: 'bot_test', style: 'primary' }
+                { text: `🔇 فیلتر سکوت ${muteOn(targetU) ? '🟢' : '⚪'} · ${muteList(targetU).length}`, callback_data: 'mute_menu', style: muteOn(targetU) ? 'success' : 'primary' },
+                { text: '🎨 فونت ساعت', callback_data: 'bot_font_menu', style: 'primary' }
               ],
               [
-                { text: `🔇 فیلتر سکوت: ${muteOn(targetU) ? 'روشن 🟢' : 'خاموش ⚪'} (${muteList(targetU).length})`, callback_data: 'mute_menu', style: muteOn(targetU) ? 'success' : 'primary' }
-              ],
-              [
-                { text: '🌐 باز کردن پنل در مرورگر', url: directAppUrl, style: 'primary' }
+                { text: '🧪 تست گزارش', callback_data: 'bot_test', style: 'primary' },
+                { text: '🌐 پنل در مرورگر', url: directAppUrl, style: 'primary' }
               ]
             ]
           };
@@ -3546,7 +3547,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
           return {
             inline_keyboard: [
               [
-                { text: `🔄 وضعیت پاسخگویی هوشمند: ${aiAct ? 'غیرفعال‌سازی ⚪' : 'فعال‌سازی 🟢'}`, callback_data: 'bot_toggle_ai', style: aiAct ? 'danger' : 'success' }
+                { text: `${aiAct ? '⚪ خاموش کردن پاسخ هوشمند' : '🟢 روشن کردن پاسخ هوشمند'}`, callback_data: 'bot_toggle_ai', style: aiAct ? 'danger' : 'success' }
               ],
               [
                 { text: `🤖 مدل هوش مصنوعی: ${modelName}`, callback_data: 'ai_models_menu', style: 'primary' }
@@ -3556,12 +3557,12 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
                 { text: `⏱️ فاصله: ${targetU.telegram?.aiCooldown === 0 ? 'بدون محدودیت ⚡' : `هر ${targetU.telegram?.aiCooldown || 5} دقیقه`}`, callback_data: 'ai_toggle_cooldown', style: 'primary' }
               ],
               [
-                { text: '🔑 ثبت / ویرایش کلید API', callback_data: 'ai_set_key_prompt', style: 'primary' },
-                { text: '🗑️ حذف کامل کلید API', callback_data: 'ai_delete_key', style: 'danger' }
+                { text: '🔑 ثبت کلید API', callback_data: 'ai_set_key_prompt', style: 'primary' },
+                { text: '🗑️ حذف کلید', callback_data: 'ai_delete_key', style: 'danger' }
               ],
               [
-                { text: '🧪 تست زنده پاسخ هوش مصنوعی', callback_data: 'ai_test_modal', style: 'primary' },
-                { text: '🔙 بازگشت به منوی اصلی', callback_data: 'bot_menu', style: 'danger' }
+                { text: '🧪 تست پاسخ AI', callback_data: 'ai_test_modal', style: 'primary' },
+                { text: '🔙 منوی اصلی', callback_data: 'bot_menu', style: 'danger' }
               ]
             ]
           };
