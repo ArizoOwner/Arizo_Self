@@ -229,85 +229,45 @@ function buildMuteTargets(entry) {
 }
 
 /**
- * حذف چندمرحله‌ای و تضمینی پیام از فرد بی‌صدا شده در تمام انواع چت‌ها (پیوی، سوپرگروه، کانال)
+ * حذف «فقط همان یک پیام» از فرد بی‌صدا شده (پیوی، گروه عادی، سوپرگروه)
+ * ⚠️ هرگز از messages.DeleteHistory استفاده نشود: کل تاریخچهٔ چت را دوطرفه پاک می‌کند.
+ * ⚠️ شناسهٔ پیام سوپرگروه/کانال محلیِ همان کانال است؛ ارسال آن به messages.DeleteMessages
+ *    ممکن است پیام دیگری با همان شماره را در چت دیگری پاک کند.
  */
 async function deleteTelegramMessage(client, message, username = '') {
   const msgId = message.id;
-  let deleted = false;
-  const targetPeer = message.peerId || message.chatId || message.senderId;
-  const isChannel = Boolean(message.isChannel || (message.peerId && (message.peerId.className === 'PeerChannel' || message.peerId instanceof Api.PeerChannel)));
-  const isPrivate = Boolean(message.isPrivate || (message.peerId && (message.peerId.className === 'PeerUser' || message.peerId instanceof Api.PeerUser)) || (!isChannel && !message.isGroup));
+  if (!msgId) return false;
+  const isChannel = Boolean(message.peerId && (message.peerId.className === 'PeerChannel' || message.peerId instanceof Api.PeerChannel));
 
-  // ۱. حذف در کانال یا سوپرگروه (Supergroup / Channel) با channels.DeleteMessages
-  if (isChannel && message.peerId) {
+  if (isChannel) {
     try {
-      const channelPeer = await client.getInputEntity(message.peerId).catch(() => message.peerId);
-      await client.invoke(new Api.channels.DeleteMessages({
-        channel: channelPeer,
-        id: [msgId]
-      }));
-      deleted = true;
-      console.log(`✅ [${username}] Muted message #${msgId} deleted via channels.DeleteMessages`);
-    } catch (err1) {
-      console.warn(`⚠️ [${username}] channels.DeleteMessages warning: ${err1.message}`);
+      const channelPeer = await client.getInputEntity(message.peerId);
+      await client.invoke(new Api.channels.DeleteMessages({ channel: channelPeer, id: [msgId] }));
+      console.log(`✅ [${username}] Muted message #${msgId} deleted in supergroup`);
+      return true;
+    } catch (err) {
+      // بدون دسترسی ادمین حذف پیام دیگران در سوپرگروه ممکن نیست
+      console.warn(`⚠️ [${username}] Supergroup delete failed (admin rights needed?): ${err.message}`);
+      return false;
     }
   }
 
-  // ۲. روش مستقیم و قطعی RPC پیام‌ها (Api.messages.DeleteMessages با revoke: true)
-  // این متد برای پیام‌های پیوی و گروه‌های عادی نیازی به InputPeer ندارد و مستقیماً دوطرفه حذف می‌شود
+  // پیوی و گروه عادی: شناسهٔ پیام در صندوق کاربر یکتاست؛ revoke برای حذف دوطرفهٔ همین پیام
   try {
-    await client.invoke(new Api.messages.DeleteMessages({
-      id: [msgId],
-      revoke: true
-    }));
-    deleted = true;
-    console.log(`✅ [${username}] Muted message #${msgId} deleted via messages.DeleteMessages (revoke: true)`);
-  } catch (err2) {
-    console.warn(`⚠️ [${username}] messages.DeleteMessages warning: ${err2.message}`);
+    await client.invoke(new Api.messages.DeleteMessages({ id: [msgId], revoke: true }));
+    console.log(`✅ [${username}] Muted message #${msgId} deleted`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ [${username}] Delete failed: ${err.message}`);
   }
-
-  // ۳. در چت‌های خصوصی، اجرای همزمان DeleteHistory دوطرفه جهت تضمین ۱۰۰٪ محو شدن کامل پیام برای هر دو طرف
-  if (isPrivate && targetPeer) {
-    try {
-      const inputPeer = await client.getInputEntity(targetPeer).catch(() => null);
-      if (inputPeer) {
-        await client.invoke(new Api.messages.DeleteHistory({
-          peer: inputPeer,
-          maxId: msgId,
-          revoke: true,
-          justClear: false
-        }));
-        deleted = true;
-        console.log(`✅ [${username}] Muted message #${msgId} history revoked via messages.DeleteHistory`);
-      }
-    } catch (err3) {
-      console.warn(`⚠️ [${username}] messages.DeleteHistory warning: ${err3.message}`);
-    }
+  try {
+    await message.delete({ revoke: true });
+    console.log(`✅ [${username}] Muted message #${msgId} deleted via message.delete`);
+    return true;
+  } catch (err) {
+    console.warn(`⚠️ [${username}] message.delete failed: ${err.message}`);
   }
-
-  // ۴. روش رسمی GramJS deleteMessages (پشتیبان)
-  if (!deleted && targetPeer) {
-    try {
-      await client.deleteMessages(targetPeer, [msgId], { revoke: true });
-      deleted = true;
-      console.log(`✅ [${username}] Muted message #${msgId} deleted via client.deleteMessages`);
-    } catch (err4) {
-      console.warn(`⚠️ [${username}] client.deleteMessages warning: ${err4.message}`);
-    }
-  }
-
-  // ۵. روش شیء پیام (message.delete)
-  if (!deleted) {
-    try {
-      await message.delete({ revoke: true });
-      deleted = true;
-      console.log(`✅ [${username}] Muted message #${msgId} deleted via message.delete`);
-    } catch (err5) {
-      console.warn(`⚠️ [${username}] message.delete warning: ${err5.message}`);
-    }
-  }
-
-  return deleted;
+  return false;
 }
 
 /**
