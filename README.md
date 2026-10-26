@@ -15,7 +15,7 @@
 <a href="#"><img src="https://img.shields.io/badge/Response_Time-%3C%2040ms-a855f7?style=for-the-badge&labelColor=0d1117" alt="Response Time"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Security-2FA_TOTP_+_Honeypot-ec4899?style=for-the-badge&labelColor=0d1117" alt="Security"/></a>
 <a href="#"><img src="https://img.shields.io/badge/Uptime-99.9%25-0ea5e9?style=for-the-badge&labelColor=0d1117" alt="Uptime"/></a>
-<a href="#"><img src="https://img.shields.io/badge/Version-3.6_PRO-f59e0b?style=for-the-badge&labelColor=0d1117" alt="Version"/></a>
+<a href="#"><img src="https://img.shields.io/badge/Version-4.0_PRO-f59e0b?style=for-the-badge&labelColor=0d1117" alt="Version"/></a>
 
 <br><br>
 
@@ -170,7 +170,9 @@
 ### 🔇 &nbsp; ۹. فیلتر سکوت و حذف دوطرفه (Mute Filter)
 > سایلنت کردن و حذف قطعی و دوطرفه پیام‌های کاربران مزاحم
 
-- 🗑️ حذف دوطرفه بلادرنگ با پرچم `revoke: true`
+- 🗑️ حذف خودکار فقط پیام جدید فرد ساکت‌شده (نه کل تاریخچهٔ چت)
+- 🎛️ سوییچ روشن/خاموش مستقل؛ حتی با لیست خالی هم روشن می‌ماند
+- 🤖 مدیریت کامل از ربات تلگرام: روشن/خاموش، افزودن، حذف تکی و پاکسازی لیست
 - 🔢 پشتیبانی از ارقام فارسی و انگلیسی به صورت خودکار
 - ⌨️ دستورات سریع تلگرامی `.mute` و `.unmute` در متن پیام
 - 👻 بازیابی خودکار AccessHash برای اشخاص خارج از مخاطبین
@@ -246,6 +248,8 @@
 - 🌓 هماهنگی خودکار با تم لایت/دارک تلگرام شما
 - 📊 گزارش زنده عملکرد، سوکت‌ها و لاگ‌های اخیر
 - 🛠️ تغییر آنی پیکربندی‌ها با رابط لمسی مدرن
+- 📱 طراحی کاملاً ریسپانسیو موبایل با فونت یکپارچهٔ Vazirmatn و پنجره‌های Bottom Sheet
+- 🖼️ نمایش زندهٔ عکس پروفایل تلگرام که با تغییر عکس ظرف چند ثانیه به‌روز می‌شود
 
 </td>
 <td width="50%">
@@ -581,7 +585,7 @@ pm2 save && pm2 startup
 
 <samp>
 
-**Arizo Self Engine v3.6.2 PRO** — مهندسی شده برای بالاترین سرعت، امنیت نفوذناپذیر و تجربه کاربری بی‌همتا 💎
+**Arizo Self Engine v4.0 PRO** — مهندسی شده برای بالاترین سرعت، امنیت نفوذناپذیر و تجربه کاربری بی‌همتا 💎
 
 *Engineered with precision for maximum speed, bulletproof 2FA security & pure aesthetics*
 
