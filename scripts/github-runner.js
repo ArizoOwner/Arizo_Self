@@ -2929,7 +2929,10 @@ async function fetchActiveUsers() {
     if (lastActiveUsersETag) {
       headers['If-None-Match'] = lastActiveUsersETag;
     }
-    const res = await fetch(`${CLOUDFLARE_URL}/api/internal/active-users`, { headers });
+    const res = await fetch(`${CLOUDFLARE_URL}/api/internal/active-users`, {
+      headers,
+      signal: AbortSignal.timeout(12000)
+    });
 
     if (res.status === 304) {
       // داده‌ها در سرور تغییر نکرده‌اند؛ استفاده از کش محلی بدون بارگذاری مجدد شبکه
@@ -3153,30 +3156,39 @@ async function syncOwnerTgIdToCloudflare(username, tgUserId, me = null, client =
 async function triggerNextWorkflow() {
   if (!GITHUB_TOKEN || !GITHUB_REPOSITORY) {
     console.log('ℹ️ GITHUB_TOKEN or GITHUB_REPOSITORY not set. Skipping self-dispatch trigger.');
-    return;
+    return false;
   }
 
+  const ref = process.env.GITHUB_REF_NAME || 'main';
   console.log('🔄 Triggering next GitHub Actions workflow to continue the 24/7 loop...');
-  try {
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/telegram-clock.yml/dispatches`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${GITHUB_TOKEN}`,
-        'Accept': 'application/vnd.github.v3+json',
-        'User-Agent': 'Arizo-Self-Dispatcher'
-      },
-      body: JSON.stringify({ ref: 'main' })
-    });
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/telegram-clock.yml/dispatches`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${GITHUB_TOKEN}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'Arizo-Self-Dispatcher'
+        },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({ ref })
+      });
 
-    if (res.ok || res.status === 204) {
-      console.log('✅ Next workflow successfully triggered! 24/7 loop maintained.');
-    } else {
-      const errText = await res.text();
-      console.warn(`⚠️ Dispatch API returned status ${res.status}: ${errText}`);
+      if (res.ok || res.status === 204) {
+        console.log('✅ Next workflow successfully triggered! 24/7 loop maintained.');
+        return true;
+      }
+      const errText = await res.text().catch(() => '');
+      console.warn(`⚠️ Dispatch API attempt ${attempt}/3 returned status ${res.status}: ${errText}`);
+    } catch (err) {
+      console.error(`⚠️ Error triggering next workflow (attempt ${attempt}/3):`, err.message);
     }
-  } catch (err) {
-    console.error('⚠️ Error triggering next workflow:', err.message);
+    if (attempt < 3) {
+      await new Promise(r => setTimeout(r, attempt * 2000));
+    }
   }
+  return false;
 }
 
 /**
@@ -3607,7 +3619,8 @@ async function pollAndProcessBotActions(pool) {
       headers: {
         'Authorization': `Bearer ${RUNNER_SECRET}`,
         'User-Agent': 'Arizo-Sub100ms-Engine/3.5'
-      }
+      },
+      signal: AbortSignal.timeout(10000)
     });
     if (!res.ok) return 0;
     const data = await res.json();
@@ -3836,13 +3849,20 @@ async function main() {
     const elapsed = Date.now() - startTime;
     const remainingTime = maxDurationMs - elapsed;
 
-    // استارت جاب بعدی در ۱۰ دقیقه پایانی
-    if (remainingTime <= 10 * 60 * 1000 && !nextTriggerScheduled) {
-      nextTriggerScheduled = true;
-      await triggerNextWorkflow();
+    // استارت جاب بعدی در ۱۵ دقیقه پایانی با تلاش مجدد خودکار در صورت خطای موقت گیت‌هاب
+    if (remainingTime <= 15 * 60 * 1000 && !nextTriggerScheduled) {
+      const triggered = await triggerNextWorkflow();
+      if (triggered) {
+        nextTriggerScheduled = true;
+      } else {
+        console.warn('⚠️ Self-dispatch failed; will retry on the next minute cycle.');
+      }
     }
 
     if (remainingTime <= 0) {
+      if (!nextTriggerScheduled) {
+        await triggerNextWorkflow();
+      }
       console.log('🏁 Duration reached. Cleaning up and exiting...');
       // settingsSyncInterval removed (integrated into minute cycle)
       if (botPollTimeout) clearTimeout(botPollTimeout);

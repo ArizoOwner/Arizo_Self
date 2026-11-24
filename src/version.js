@@ -3,10 +3,12 @@
 export const APP_NAME = 'Arizo Self';
 export const APP_VERSION = '4.0.0';
 export const APP_CHANNEL = 'PRO';
-export const APP_BUILD = 2026102704;
+export const APP_BUILD = 2026102705;
 
 export const RELEASE_NOTES = {
   fa: [
+    'نگهبان خودترمیمی رانر در ورکر + سلامت‌سنج نیم‌ساعته خارج از پیک در GitHub Actions و تلاش مجدد خودکار تحویل رانر (جلوگیری کامل از توقف طولانی ساعت)',
+    'ارتقای وابستگی‌های توسعه (wrangler/undici) و اکشن‌های گیت‌هاب به Node 24 برای رفع کامل هشدارها و اعلان‌های امنیتی',
     'فیلتر سکوت حتی با لیست خالی هم روشن می‌ماند',
     'به‌روزرسانی زندهٔ عکس پروفایل: تشخیص فوری تغییر عکس در تلگرام و نمایش در پنل ظرف چند ثانیه',
     'طراحی ریسپانسیو موبایل، فونت‌های یکپارچه و هماهنگ، منوهای جمع‌وجورتر ربات و نمایش ساعت/آفلاین سمت راست نام اکانت',
@@ -28,6 +30,8 @@ export const RELEASE_NOTES = {
     'ویزارد روی Worker دیپلوی‌شده فقط «راه‌اندازی» می‌کند و دیتابیس‌های موجود را دوباره استفاده می‌کند'
   ],
   en: [
+    'Self-healing Worker runner watchdog, off-peak twice-hourly GitHub Actions health check without interrupting healthy runs, and retried runner handoff',
+    'Upgraded dev dependencies (wrangler/undici) and GitHub Actions to Node 24 to clear all security advisories and deprecation warnings',
     'Mute filter can stay on even with an empty list',
     'Live profile photo: instant detection of photo changes in Telegram, shown in the panel within seconds',
     'Responsive mobile design, unified typography, compact bot menus, clock/offline shown to the right of the account name',

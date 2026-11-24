@@ -257,3 +257,179 @@ export async function autoUpdateTick(env) {
     await putUpdaterState(env, { lastCheck: now - AUTO_INTERVAL + retryIn, lastResult: { at: now, ok: false, source: 'auto', code: (e && e.code) || 'internal' } });
   }
 }
+
+// ---------------------------------------------------------------- نگهبان خودترمیمی رانر (Runner Watchdog)
+const WATCHDOG_KEY = 'runner:watchdog_state';
+const WATCHDOG_STALE_MS = 7 * 60 * 1000;      // اگر بیش از ۷ دقیقه پینگی از رانر نرسید، مشکوک به توقف است
+const WATCHDOG_COOLDOWN_MS = 15 * 60 * 1000;  // حداقل ۱۵ دقیقه فاصله بین دو تلاش احضار
+const WATCHDOG_MAX_RUN_MS = 315 * 60 * 1000;  // اجرای بالای ۵ ساعت و ۱۵ دقیقه نیاز به جایگزین دارد
+
+export function resetWatchdogCacheForTests() {
+  globalThis.__wdNext = 0;
+}
+
+export async function getWatchdogState(env) {
+  if (env && env.DB) {
+    try {
+      const row = await env.DB.prepare('SELECT value FROM kv_store WHERE key = ?').bind(WATCHDOG_KEY).first();
+      if (row && row.value) return JSON.parse(row.value);
+    } catch (_) {}
+  }
+  if (env && env.KV) {
+    try {
+      const v = await env.KV.get(WATCHDOG_KEY, 'json');
+      if (v) return v;
+    } catch (_) {}
+  }
+  return null;
+}
+
+async function putWatchdogState(env, patch) {
+  const next = { ...(await getWatchdogState(env) || {}), ...patch };
+  const valStr = JSON.stringify(next);
+  const now = Date.now();
+  if (env && env.DB) {
+    try {
+      await env.DB.prepare('INSERT OR REPLACE INTO kv_store (key, value, updated_at) VALUES (?, ?, ?)')
+        .bind(WATCHDOG_KEY, valStr, now).run();
+      return next;
+    } catch (_) {}
+  }
+  if (env && env.KV) {
+    try { await env.KV.put(WATCHDOG_KEY, valStr); } catch (_) {}
+  }
+  return next;
+}
+
+async function readLastRunnerPing(env) {
+  if (env && env.DB) {
+    try {
+      const row = await env.DB.prepare("SELECT value FROM kv_store WHERE key = 'runner:last_ping'").first();
+      if (row && row.value) return Number(row.value) || 0;
+    } catch (_) {}
+  }
+  if (env && env.KV) {
+    try {
+      const v = await env.KV.get('runner:last_ping');
+      if (v) return Number(v) || 0;
+    } catch (_) {}
+  }
+  return 0;
+}
+
+async function hasAnyActiveTelegramUser(env) {
+  if (!env || !env.KV) return false;
+  const usersList = await env.KV.get('users_list', 'json');
+  if (!Array.isArray(usersList) || usersList.length === 0) return false;
+  const now = Date.now();
+  for (const uname of usersList) {
+    const u = await env.KV.get('user:' + uname, 'json');
+    if (!u || u.isSuspended || !u.telegram?.enabled || !u.telegram?.sessionEncrypted) continue;
+    if (u.subscription && u.subscription.type !== 'lifetime' && u.subscription.expiresAt && now > Number(u.subscription.expiresAt)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * نگهبان دقیقه‌ای رانر: اگر بیش از ۷ دقیقه پینگی از رانر گیت‌هاب نرسیده و کاربر فعالی وجود دارد،
+ * بررسی می‌کند آیا اجرای سالمی در GitHub Actions فعال است یا نه؛ و در صورت توقف، رانر را خودکار روشن می‌کند.
+ */
+export async function runnerWatchdogTick(env, { now = Date.now() } = {}) {
+  if (!env) return { ok: true, skipped: 'no_env' };
+
+  // ۱. بررسی سریع در حافظه RAM (بدون هیچ عملیات دیتابیس یا شبکه در وضعیت سالم)
+  if (globalThis.lastRunnerSyncTime && (now - globalThis.lastRunnerSyncTime < WATCHDOG_STALE_MS)) {
+    return { ok: true, skipped: 'fresh_ram' };
+  }
+  if (globalThis.__wdNext && now < globalThis.__wdNext) {
+    return { ok: true, skipped: 'backoff' };
+  }
+
+  // ۲. استخراج توکن گیت‌هاب (از تنظیمات ذخیره‌شدهٔ به‌روزرسان یا سکرت مستقیم Worker)
+  const creds = await loadCreds(env);
+  const ghToken = String((creds && creds.ghToken) || env.GITHUB_TOKEN || '').trim();
+  if (!ghToken) {
+    globalThis.__wdNext = now + 10 * 60 * 1000;
+    return { ok: true, skipped: 'no_gh_token' };
+  }
+
+  // ۳. بررسی آخرین پینگ ثبت‌شده در D1/KV (برای ایزولیت‌های تازه)
+  const lastPing = await readLastRunnerPing(env);
+  if (lastPing > 0 && (now - lastPing < WATCHDOG_STALE_MS)) {
+    globalThis.lastRunnerSyncTime = lastPing;
+    return { ok: true, skipped: 'fresh_ping' };
+  }
+
+  // ۴. اگر هیچ کاربر تلگرامی فعالی وجود ندارد، نیازی به روشن کردن رانر نیست
+  if (!await hasAnyActiveTelegramUser(env)) {
+    globalThis.__wdNext = now + 5 * 60 * 1000;
+    return { ok: true, skipped: 'no_active_users' };
+  }
+
+  // ۵. بررسی کول‌داون ۱۵ دقیقه‌ای بین تمام ایزولیت‌ها
+  const wd = await getWatchdogState(env);
+  if (wd && wd.lastAttemptAt && (now - wd.lastAttemptAt < WATCHDOG_COOLDOWN_MS)) {
+    globalThis.__wdNext = wd.lastAttemptAt + WATCHDOG_COOLDOWN_MS;
+    return { ok: true, skipped: 'cooldown' };
+  }
+
+  // ثبت پیش‌دستانهٔ تلاش جهت جلوگیری از احضار موازی توسط چند ایزولیت
+  globalThis.__wdNext = now + WATCHDOG_COOLDOWN_MS;
+  await putWatchdogState(env, { lastAttemptAt: now });
+
+  try {
+    let repo = String((creds && creds.repo) || env.GITHUB_REPOSITORY || env.GITHUB_REPO || '').trim();
+    if (!repo) {
+      const me = await ghCall(ghToken, '/user');
+      if (me.ok && me.data && me.data.login) {
+        repo = `${me.data.login}/${SOURCE_REPO.split('/')[1]}`;
+      }
+    }
+    if (!REPO_RE.test(repo)) {
+      await putWatchdogState(env, { lastAttemptAt: now, lastAction: 'bad_repo' });
+      return { ok: false, skipped: 'bad_repo' };
+    }
+
+    // بررسی اینکه آیا هم‌اکنون اجرای سالمی روی گیت‌هاب در حال اجرا یا صف هست
+    const runsRes = await ghCall(ghToken, `/repos/${repo}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=8`);
+    if (runsRes.ok && runsRes.data && Array.isArray(runsRes.data.workflow_runs)) {
+      const healthyActive = runsRes.data.workflow_runs.some(r => {
+        if (r.status !== 'in_progress' && r.status !== 'queued') return false;
+        const startedAt = Date.parse(r.run_started_at || r.created_at || '');
+        const age = Number.isFinite(startedAt) ? (now - startedAt) : 0;
+        if (age >= WATCHDOG_MAX_RUN_MS) return false;
+        if (r.event === 'schedule' && age < 45000) return false;
+        return true;
+      });
+      if (healthyActive) {
+        await putWatchdogState(env, { lastAttemptAt: now, lastCheckAt: now, lastAction: 'already_active', repo });
+        return { ok: true, skipped: 'already_active', repo };
+      }
+    }
+
+    let branch = 'main';
+    const repoInfo = await ghCall(ghToken, `/repos/${repo}`);
+    if (repoInfo.ok && repoInfo.data && repoInfo.data.default_branch) {
+      branch = repoInfo.data.default_branch;
+    }
+
+    const disp = await ghCall(ghToken, `/repos/${repo}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
+      method: 'POST',
+      body: { ref: branch }
+    });
+    const dispatched = disp.ok || disp.status === 204;
+    await putWatchdogState(env, {
+      lastAttemptAt: now,
+      lastCheckAt: now,
+      lastDispatchAt: dispatched ? now : ((wd && wd.lastDispatchAt) || 0),
+      lastAction: dispatched ? 'dispatched' : 'dispatch_failed',
+      lastStatus: disp.status,
+      repo
+    });
+    return { ok: dispatched, action: dispatched ? 'dispatched' : 'dispatch_failed', repo, status: disp.status };
+  } catch (err) {
+    await putWatchdogState(env, { lastAttemptAt: now, lastAction: 'error', lastError: (err && err.code) || 'network' });
+    return { ok: false, action: 'error' };
+  }
+}

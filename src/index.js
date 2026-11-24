@@ -21,7 +21,7 @@ import { BackupManager } from './modules/backupManager.js';
 import { sanitizeWatchAlerts } from './modules/watchAlerts.js';
 import { handleWizardApi, WizardError } from './modules/wizardDeploy.js';
 import { APP_NAME, APP_VERSION, APP_CHANNEL, APP_BUILD } from './version.js';
-import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName, getUpdaterState, putUpdaterState, loadCreds, saveCreds, clearCreds, runStoredUpdate, autoUpdateTick } from './modules/updater.js';
+import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName, getUpdaterState, putUpdaterState, loadCreds, saveCreds, clearCreds, runStoredUpdate, autoUpdateTick, runnerWatchdogTick, getWatchdogState, resetWatchdogCacheForTests } from './modules/updater.js';
 import QRCode from 'qrcode';
 
 // هدرهای امنیتی درجه سازمانی (Enterprise Security & CSP)
@@ -289,6 +289,9 @@ export function resetStorageCachesForTests() {
   authTokensCache.clear();
   activeUsersCache = null;
   activeUsersCacheTime = 0;
+  globalThis.lastRunnerSyncTime = 0;
+  globalThis.lastD1PingWrite = 0;
+  resetWatchdogCacheForTests();
 }
 
 function initEnvStorage(env) {
@@ -715,12 +718,24 @@ export default {
         } catch (_) {}
       }
       const cf = request.cf || {};
+      const wdState = await getWatchdogState(env);
+      const storedCreds = await loadCreds(env);
+      const watchdogConfigured = Boolean((storedCreds && storedCreds.ghToken) || env.GITHUB_TOKEN);
       return json({
         ok: true,
         app: { name: APP_NAME, version: APP_VERSION, channel: APP_CHANNEL, build: APP_BUILD },
         worker: { name: guessWorkerName(url.hostname), host: url.hostname, colo: cf.colo || '', country: cf.country || '' },
         storage: { kv: !!env.KV_RAW || !!env.KV, d1: !!env.DB },
-        runner: { lastPing: runnerPing, alive: runnerPing > 0 && Date.now() - runnerPing < 300000, secret: !!env.RUNNER_SECRET },
+        runner: {
+          lastPing: runnerPing,
+          alive: runnerPing > 0 && Date.now() - runnerPing < 300000,
+          secret: !!env.RUNNER_SECRET,
+          watchdog: {
+            configured: watchdogConfigured,
+            lastDispatchAt: (wdState && wdState.lastDispatchAt) || 0,
+            lastAction: (wdState && wdState.lastAction) || null
+          }
+        },
         users: usersList.length,
         serverTime: Date.now()
       }, 200, { 'Cache-Control': 'no-store' });
@@ -5576,6 +5591,7 @@ async function callAIApiWorker(provider, apiKey, systemPrompt, context, userMess
     initEnvStorage(env);
     ctx.waitUntil(secureWebhooks(env).catch(() => {}));
     ctx.waitUntil(autoUpdateTick(env).catch(() => {}));
+    ctx.waitUntil(runnerWatchdogTick(env).catch(() => {}));
     ctx.waitUntil((async () => {
       try {
         // ۱. بررسی زنده بودن رانر در حافظه ایزولیت (اگر در ۵ دقیقه اخیر فعال بوده، پردازش کرون فوراً متوقف می‌شود)

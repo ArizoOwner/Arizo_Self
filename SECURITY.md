@@ -1,21 +1,19 @@
-# Security Policy
+# Security Policy · سیاست امنیتی
 
-## Supported Versions
+## Supported Versions · نسخه‌های تحت پشتیبانی
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+| Version | Supported |
+| ------- | --------- |
+| `4.0.x` (PRO) | ✅ Supported |
+| `< 4.0` | ❌ Unsupported |
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+## Reporting a Vulnerability · گزارش آسیب‌پذیری
 
-## Reporting a Vulnerability
+لطفاً آسیب‌پذیری‌های امنیتی را به‌صورت **عمومی در Issues منتشر نکنید**. برای گزارش محرمانه:
+- از بخش **GitHub Security Advisories** همین مخزن (`Security → Advisories → Report a vulnerability`) استفاده کنید.
+- مراحل بازتولید، نسخه/بیلد (`APP_BUILD`) و اثر احتمالی را ذکر کنید.
 
-Use this section to tell people how to report a vulnerability.
-
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Please **do not report security vulnerabilities via public GitHub issues**. Instead:
+- Report them privately via **GitHub Security Advisories** (`Security → Advisories → Report a vulnerability`).
+- Include reproduction steps, the affected build (`APP_BUILD`), and expected impact.
+- We aim to acknowledge reports within 48 hours and publish fixes promptly in the active `v4.0.0-PRO` release.

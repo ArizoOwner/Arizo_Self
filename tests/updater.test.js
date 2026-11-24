@@ -1,7 +1,7 @@
 import { describe, it, assert, assertEqual } from './test-runner.js';
 import worker, { resetStorageCachesForTests } from '../src/index.js';
 import { APP_BUILD, APP_VERSION } from '../src/version.js';
-import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName, resetReleaseCache, VERSION_INFO_URL } from '../src/modules/updater.js';
+import { checkForUpdate, applyCodeUpdate, ghSyncRunner, guessWorkerName, resetReleaseCache, runnerWatchdogTick, resetWatchdogCacheForTests, VERSION_INFO_URL } from '../src/modules/updater.js';
 import { WORKER_ASSET_URL } from '../src/modules/wizardDeploy.js';
 
 const CF_TOKEN = 'cf_' + 'x'.repeat(40);
@@ -505,6 +505,96 @@ describe('Updater — no per-isolate caching of stored credentials', () => {
       // یک isolate دیگر مستقیماً در KV خام می‌نویسد؛ این isolate باید فوراً ببیند
       await env.KV_RAW.put('updater:creds', '');
       assertEqual((await (await worker.fetch(adminReq('/api/admin/update/settings', token), env)).json()).connected, false);
+    } finally { net.restore(); }
+  });
+});
+
+describe('Updater — self-healing runner watchdog', () => {
+  async function seedActiveUser(env) {
+    await env.KV.put('users_list', JSON.stringify(['boss']));
+    await env.KV.put('user:boss', JSON.stringify({
+      username: 'boss',
+      isSuspended: false,
+      subscription: { type: 'lifetime' },
+      telegram: { enabled: true, sessionEncrypted: 'v2:dummy-encrypted-session' }
+    }));
+  }
+
+  function mockWatchdogGh({ workflowRuns = [], defaultBranch = 'main' } = {}) {
+    const original = globalThis.fetch;
+    const calls = [];
+    globalThis.fetch = async (input, init = {}) => {
+      const u = typeof input === 'string' ? input : input.url;
+      const method = (init.method || 'GET').toUpperCase();
+      calls.push({ u, method, body: init.body });
+      if (u.startsWith('https://api.github.com/')) {
+        const p = u.replace('https://api.github.com', '');
+        if (p === '/user') return json({ login: 'ArizoOwner' });
+        if (p === '/repos/ArizoOwner/Arizo_Self') return json({ full_name: 'ArizoOwner/Arizo_Self', default_branch: defaultBranch });
+        if (p.includes('/actions/workflows/telegram-clock.yml/runs')) return json({ workflow_runs: workflowRuns });
+        if (p.endsWith('/actions/workflows/telegram-clock.yml/dispatches') && method === 'POST') return new Response(null, { status: 204 });
+        return json({ message: 'unmocked ' + p }, 404);
+      }
+      return original(input, init);
+    };
+    return { calls, restore: () => { globalThis.fetch = original; } };
+  }
+
+  it('should dispatch telegram-clock.yml when runner ping is stale and no run is active', async () => {
+    const env = createEnv();
+    env.GITHUB_TOKEN = GH_TOKEN;
+    env.GITHUB_REPOSITORY = 'ArizoOwner/Arizo_Self';
+    await seedActiveUser(env);
+    const now = Date.now();
+    await env.KV.put('runner:last_ping', String(now - 10 * 60 * 1000));
+    const net = mockWatchdogGh({ workflowRuns: [{ id: 542, status: 'completed', conclusion: 'cancelled', event: 'schedule', created_at: new Date(now - 60 * 60 * 1000).toISOString() }] });
+    try {
+      const res = await runnerWatchdogTick(env, { now });
+      assertEqual(res.ok, true);
+      assertEqual(res.action, 'dispatched');
+      assertEqual(net.calls.filter(c => c.u.endsWith('/dispatches') && c.method === 'POST').length, 1);
+
+      // دومین فراخوانی بلافاصله باید توسط کول‌داون ۱۵ دقیقه‌ای رد شود
+      resetWatchdogCacheForTests();
+      const res2 = await runnerWatchdogTick(env, { now: now + 60 * 1000 });
+      assertEqual(res2.skipped, 'cooldown');
+      assertEqual(net.calls.filter(c => c.u.endsWith('/dispatches') && c.method === 'POST').length, 1);
+    } finally { net.restore(); }
+  });
+
+  it('should skip dispatch when runner ping is fresh or a healthy run is already active', async () => {
+    const env = createEnv();
+    env.GITHUB_TOKEN = GH_TOKEN;
+    env.GITHUB_REPOSITORY = 'ArizoOwner/Arizo_Self';
+    await seedActiveUser(env);
+    const now = Date.now();
+    await env.KV.put('runner:last_ping', String(now - 2 * 60 * 1000));
+    const net = mockWatchdogGh({ workflowRuns: [{ id: 543, status: 'in_progress', event: 'workflow_dispatch', run_started_at: new Date(now - 30 * 60 * 1000).toISOString() }] });
+    try {
+      const rFresh = await runnerWatchdogTick(env, { now });
+      assertEqual(rFresh.skipped, 'fresh_ping');
+      assertEqual(net.calls.length, 0);
+
+      // پینگ قدیمی شود اما رانر سالم روی GitHub Actions در حال اجرا باشد
+      globalThis.lastRunnerSyncTime = 0;
+      await env.KV.put('runner:last_ping', String(now - 12 * 60 * 1000));
+      const rActive = await runnerWatchdogTick(env, { now });
+      assertEqual(rActive.skipped, 'already_active');
+      assertEqual(net.calls.filter(c => c.u.endsWith('/dispatches')).length, 0);
+    } finally { net.restore(); }
+  });
+
+  it('should skip dispatch when no active telegram users exist', async () => {
+    const env = createEnv();
+    env.GITHUB_TOKEN = GH_TOKEN;
+    env.GITHUB_REPOSITORY = 'ArizoOwner/Arizo_Self';
+    await env.KV.put('users_list', JSON.stringify(['boss']));
+    await env.KV.put('user:boss', JSON.stringify({ username: 'boss', telegram: { enabled: false } }));
+    const net = mockWatchdogGh({ workflowRuns: [] });
+    try {
+      const res = await runnerWatchdogTick(env);
+      assertEqual(res.skipped, 'no_active_users');
+      assertEqual(net.calls.length, 0);
     } finally { net.restore(); }
   });
 });
