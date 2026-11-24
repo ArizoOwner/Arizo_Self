@@ -17,6 +17,6 @@
     "tweetnacl": "^1.0.3"
   },
   "devDependencies": {
-    "wrangler": "^4.0.0"
+    "wrangler": "^4.157.0"
   }
 }
